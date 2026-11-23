@@ -19,6 +19,9 @@ namespace RE2Extended.Runtime
         private MethodInfo speedTarget;
         private CruiseSpeedContext speedContext;
         private bool disposed;
+        private bool localizationCsvLogged;
+        private bool localizationCsvErrorLogged;
+        private bool localizationWaitLogged;
 
         public void Start(IModApi api)
         {
@@ -42,6 +45,7 @@ namespace RE2Extended.Runtime
 
             harmony = new Harmony("RE2Extended.runtime");
             DeviceBucketPatch.Configure(game, api, harmony);
+            InstallIconAliasPatch(api);
 
             InstallLocalization(api);
             if (api.Application != null)
@@ -107,6 +111,43 @@ namespace RE2Extended.Runtime
             }
         }
 
+        private void InstallIconAliasPatch(IModApi api)
+        {
+            try
+            {
+                Type uiSpriteType = AppDomain.CurrentDomain.GetAssemblies()
+                    .Select(a => a.GetType("UISprite", false))
+                    .FirstOrDefault(t => t != null);
+                if (uiSpriteType == null)
+                {
+                    api.Log("[RE2Extended] UISprite not found; icon aliases disabled.");
+                    return;
+                }
+
+                PropertyInfo spriteName = uiSpriteType.GetProperty(
+                    "spriteName",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                MethodInfo setter = spriteName == null ? null : spriteName.GetSetMethod();
+                if (setter == null)
+                {
+                    api.Log("[RE2Extended] UISprite.spriteName setter not found; icon aliases disabled.");
+                    return;
+                }
+
+                harmony.Patch(
+                    setter,
+                    prefix: new HarmonyMethod(typeof(IconAliasPatch).GetMethod(
+                        nameof(IconAliasPatch.Prefix), BindingFlags.Static | BindingFlags.Public)));
+
+                api.Log("[RE2Extended] Icon aliases installed: Cruise Amplifier -> CapacitorMS.");
+            }
+            catch (Exception error)
+            {
+                api.Log("[RE2Extended] Icon alias install failed: " +
+                        error.GetType().Name + ": " + error.Message);
+            }
+        }
+
         private void InstallLocalization(IModApi api)
         {
             try
@@ -114,8 +155,10 @@ namespace RE2Extended.Runtime
                 Type localizationType = AppDomain.CurrentDomain.GetAssemblies()
                     .Select(a => a.GetType("Localization", false))
                     .FirstOrDefault(t => t != null &&
-                        t.GetMethod("Set", BindingFlags.Static | BindingFlags.Public, null,
-                            new[] { typeof(string), typeof(string) }, null) != null);
+                        (t.GetMethod("Set", BindingFlags.Static | BindingFlags.Public, null,
+                            new[] { typeof(string), typeof(string) }, null) != null ||
+                         t.GetMethod("LoadCSV", BindingFlags.Static | BindingFlags.Public, null,
+                            new[] { typeof(byte[]), typeof(bool) }, null) != null));
 
                 if (localizationType == null)
                 {
@@ -129,43 +172,72 @@ namespace RE2Extended.Runtime
                     null,
                     new[] { typeof(string), typeof(string) },
                     null);
-                if (set == null)
+                MethodInfo loadCsv = localizationType.GetMethod(
+                    "LoadCSV",
+                    BindingFlags.Static | BindingFlags.Public,
+                    null,
+                    new[] { typeof(byte[]), typeof(bool) },
+                    null);
+                PropertyInfo dictionaryProperty = localizationType.GetProperty(
+                    "dictionary",
+                    BindingFlags.Static | BindingFlags.Public);
+                FieldInfo localizationSetField = localizationType.GetField(
+                    "localizationHasBeenSet",
+                    BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+
+                bool merged = false;
+                if (loadCsv != null)
                 {
-                    api.Log("[RE2Extended] Localization.Set(string,string) not found; device names will use internal keys.");
-                    return;
+                    string configuration = GetConfigurationFolder();
+                    string csvPath = configuration == null
+                        ? null
+                        : Path.Combine(configuration, "Localization.csv");
+
+                    if (csvPath != null && File.Exists(csvPath))
+                    {
+                        if (IsLocalizationTableReady(dictionaryProperty, localizationSetField))
+                        {
+                            try
+                            {
+                                merged = (bool)loadCsv.Invoke(null,
+                                    new object[] { File.ReadAllBytes(csvPath), true });
+                                if (merged)
+                                {
+                                    if (!localizationCsvLogged)
+                                    {
+                                        localizationCsvLogged = true;
+                                        api.Log("[RE2Extended] Localization CSV merged: " + csvPath + ".");
+                                    }
+                                }
+                                else
+                                {
+                                    LogLocalizationCsvFailure(api,
+                                        "Localization.LoadCSV returned false");
+                                }
+                            }
+                            catch (TargetInvocationException error)
+                            {
+                                LogLocalizationCsvFailure(api, error.InnerException ?? error);
+                            }
+                            catch (Exception error)
+                            {
+                                LogLocalizationCsvFailure(api, error);
+                            }
+                        }
+                        else if (!localizationWaitLogged)
+                        {
+                            localizationWaitLogged = true;
+                            api.Log("[RE2Extended] Localization table not ready; using fallback entries until the next playfield load.");
+                        }
+                    }
+                    else
+                    {
+                        LogLocalizationCsvFailure(api, "Localization.csv not found at " + csvPath);
+                    }
                 }
 
-                SetLocalization(set, "CruiseAmplifier", "Cruise Amplifier");
-                SetLocalization(set, "CruiseAmplifierCV", "Cruise Amplifier");
-                SetLocalization(set, "CruiseAmplifierSV", "Cruise Amplifier");
-
-                const string common =
-                    "Cruise Amplifiers are standard aftermarket upgrades for commercial vessels for improving sublight travel times. " +
-                    "They increase the maximum velocity of the ship, but require shields to be down to function. " +
-                    "Additionally, they automatically shut off when under fire. " +
-                    "Removing a cruise amplifier will activate the safety lockout for 20 seconds.";
-
-                SetLocalization(set, "bkiCruiseAmplifierCV", common +
-                    "\n\nIn space:\n" +
-                    "1 amplifier: 115 m/s\n" +
-                    "2 amplifiers: 130 m/s\n" +
-                    "3 amplifiers: 145 m/s\n" +
-                    "4 amplifiers: 160 m/s\n\n" +
-                    "In atmosphere:\n" +
-                    "1 amplifier: 65 m/s\n" +
-                    "2 amplifiers: 70 m/s\n" +
-                    "3 amplifiers: 75 m/s\n" +
-                    "4 amplifiers: 80 m/s");
-
-                SetLocalization(set, "bkiCruiseAmplifierSV", common +
-                    "\n\nIn space:\n" +
-                    "1 amplifier: 160 m/s\n" +
-                    "2 amplifiers: 200 m/s\n\n" +
-                    "In atmosphere:\n" +
-                    "1 amplifier: 80 m/s\n" +
-                    "2 amplifiers: 100 m/s");
-
-                api.Log("[RE2Extended] Cruise Amplifier localization entries installed.");
+                if (!merged && set != null)
+                    InstallLocalizationFallback(set);
             }
             catch (Exception error)
             {
@@ -174,10 +246,81 @@ namespace RE2Extended.Runtime
             }
         }
 
+        private static bool IsLocalizationTableReady(PropertyInfo dictionaryProperty, FieldInfo localizationSetField)
+        {
+            try
+            {
+                // Do not touch Localization.dictionary before the game has loaded
+                // the base table: the getter can mark localizationHasBeenSet early
+                // and prevent the normal base CSV load.
+                if (localizationSetField != null &&
+                    !(bool)localizationSetField.GetValue(null))
+                    return false;
+
+                if (dictionaryProperty == null) return true;
+
+                object dictionary = dictionaryProperty.GetValue(null, null);
+                ICollection collection = dictionary as ICollection;
+                return dictionary != null && (collection == null || collection.Count > 0);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private void LogLocalizationCsvFailure(IModApi api, object error)
+        {
+            if (localizationCsvErrorLogged) return;
+            localizationCsvErrorLogged = true;
+
+            try
+            {
+                api.Log("[RE2Extended] Localization CSV merge failed; using fallback entries: " + error);
+            }
+            catch
+            {
+                // Never let diagnostics break the localization callback.
+            }
+        }
+
+        private static void InstallLocalizationFallback(MethodInfo set)
+        {
+            SetLocalization(set, "CruiseAmplifier", "Cruise Amplifier");
+            SetLocalization(set, "CruiseAmplifierCV", "Cruise Amplifier");
+            SetLocalization(set, "CruiseAmplifierSV", "Cruise Amplifier");
+
+            const string common =
+                "Cruise Amplifiers are standard aftermarket upgrades for commercial vessels for improving sublight travel times. " +
+                "They increase the maximum velocity of the ship, but require shields to be down to function. " +
+                "Additionally, they automatically shut off when under fire. " +
+                "Removing a cruise amplifier will activate the safety lockout for 20 seconds.";
+
+            SetLocalization(set, "bkiCruiseAmplifierCV", common +
+                "\n\nIn space:\n" +
+                "1 amplifier: 115 m/s\n" +
+                "2 amplifiers: 130 m/s\n" +
+                "3 amplifiers: 145 m/s\n" +
+                "4 amplifiers: 160 m/s\n\n" +
+                "In atmosphere:\n" +
+                "1 amplifier: 65 m/s\n" +
+                "2 amplifiers: 70 m/s\n" +
+                "3 amplifiers: 75 m/s\n" +
+                "4 amplifiers: 80 m/s");
+
+            SetLocalization(set, "bkiCruiseAmplifierSV", common +
+                "\n\nIn space:\n" +
+                "1 amplifier: 160 m/s\n" +
+                "2 amplifiers: 200 m/s\n\n" +
+                "In atmosphere:\n" +
+                "1 amplifier: 80 m/s\n" +
+                "2 amplifiers: 100 m/s");
+        }
+
         private void OnPlayfieldLoadedLocalization(IPlayfield playfield)
         {
-            // Localization may finish loading after mod Init. Reapply once the
-            // playfield is live; Set is idempotent.
+            // Localization may finish loading after mod Init. Retry the native
+            // CSV merge once the playfield is live; the merge is idempotent.
             InstallLocalization(api);
         }
 
@@ -197,9 +340,7 @@ namespace RE2Extended.Runtime
         {
             try
             {
-                string runtimeFolder = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-                string modRoot = runtimeFolder == null ? null : Path.GetDirectoryName(runtimeFolder);
-                string configuration = modRoot == null ? null : Path.Combine(modRoot, "Configuration");
+                string configuration = GetConfigurationFolder();
                 string blocksFolder = configuration == null ? null : Path.Combine(configuration, "Blocks");
                 string templatesFolder = configuration == null ? null : Path.Combine(configuration, "Templates");
 
@@ -216,9 +357,27 @@ namespace RE2Extended.Runtime
                     return;
                 }
 
-                if (!ConfigMerger.Configure(collectionType, api, blocksFolder, templatesFolder))
+                Type configFileType = game.GetType("ConfigFile", false);
+                PropertyInfo configFileProperties = configFileType == null
+                    ? null
+                    : configFileType.GetProperty("PropertiesCollection",
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+                if (!ConfigMerger.Configure(collectionType, configFileType, configFileProperties,
+                        api, blocksFolder, templatesFolder))
                 {
                     api.Log("[RE2Extended] Config merger could not resolve the ECF collection shape.");
+                    return;
+                }
+
+                bool installed = false;
+                if (configFileType != null && configFileProperties != null)
+                    installed = TryInstallConfigFileHook(api, configFileType);
+
+                if (installed)
+                {
+                    api.Log("[RE2Extended] Config merge installed on ConfigFile.Load; " +
+                            "fragments are merged once per named config load.");
                     return;
                 }
 
@@ -235,7 +394,7 @@ namespace RE2Extended.Runtime
                     {
                         harmony.Patch(method, postfix: new HarmonyMethod(postfix));
                         patched++;
-                        api.Log("[RE2Extended] Config merge hook: " + method.Name +
+                        api.Log("[RE2Extended] Config merge fallback hook: " + method.Name +
                                 "(" + string.Join(",", method.GetParameters().Select(p => p.ParameterType.Name).ToArray()) + ")");
                     }
                     catch (Exception error)
@@ -245,13 +404,51 @@ namespace RE2Extended.Runtime
                     }
                 }
 
-                api.Log("[RE2Extended] Config merge installed on " + patched + " loader(s).");
+                api.Log("[RE2Extended] Config merge installed on " + patched + " fallback loader(s).");
             }
             catch (Exception error)
             {
                 api.Log("[RE2Extended] Config merge disabled after error: " +
                         error.GetType().Name + ": " + error.Message);
             }
+        }
+
+        private bool TryInstallConfigFileHook(IModApi api, Type configFileType)
+        {
+            try
+            {
+                MethodInfo load = configFileType.GetMethod(
+                    "Load",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                    null,
+                    new[] { typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(bool) },
+                    null);
+
+                if (load == null)
+                {
+                    api.Log("[RE2Extended] ConfigFile.Load signature not found; using collection fallback.");
+                    return false;
+                }
+
+                MethodInfo postfix = typeof(ConfigFileLoadPatch)
+                    .GetMethod(nameof(ConfigFileLoadPatch.Postfix), BindingFlags.Static | BindingFlags.Public);
+                harmony.Patch(load, postfix: new HarmonyMethod(postfix));
+                api.Log("[RE2Extended] Config merge hook: ConfigFile.Load(string,string,...).");
+                return true;
+            }
+            catch (Exception error)
+            {
+                api.Log("[RE2Extended] ConfigFile.Load hook failed; using collection fallback: " +
+                        error.GetType().Name + ": " + error.Message);
+                return false;
+            }
+        }
+
+        private static string GetConfigurationFolder()
+        {
+            string runtimeFolder = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            string modRoot = runtimeFolder == null ? null : Path.GetDirectoryName(runtimeFolder);
+            return modRoot == null ? null : Path.Combine(modRoot, "Configuration");
         }
 
         public void Dispose()
@@ -396,6 +593,41 @@ namespace RE2Extended.Runtime
             try
             {
                 ConfigMerger.TryMerge(__instance);
+            }
+            catch
+            {
+                // Never let an optional config merge break a game config load.
+            }
+        }
+    }
+
+    public static class IconAliasPatch
+    {
+        private static readonly Dictionary<string, string> Aliases =
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                { "CruiseAmplifierCV", "CapacitorMS" },
+                { "CruiseAmplifierSV", "CapacitorMS" },
+                { "CruiseAmplifierCVBlocks", "CapacitorMS" },
+                { "CruiseAmplifierSVBlocks", "CapacitorMS" }
+            };
+
+        public static void Prefix(ref string value)
+        {
+            string alias;
+            if (!string.IsNullOrEmpty(value) && Aliases.TryGetValue(value, out alias))
+                value = alias;
+        }
+    }
+
+    public static class ConfigFileLoadPatch
+    {
+        public static void Postfix(object __instance, object[] __args, bool __result)
+        {
+            try
+            {
+                string name = __args != null && __args.Length > 1 ? __args[1] as string : null;
+                ConfigMerger.TryMergeConfigFile(__instance, __result, name);
             }
             catch
             {
@@ -1050,6 +1282,8 @@ namespace RE2Extended.Runtime
     internal static class ConfigMerger
     {
         private static Type collectionType;
+        private static Type configFileType;
+        private static PropertyInfo configFileProperties;
         private static Type elementType;
         private static FieldInfo elementsField;
         private static FieldInfo nameField;
@@ -1061,9 +1295,12 @@ namespace RE2Extended.Runtime
         private static bool failureLogged;
         private static readonly HashSet<string> injectedNames = new HashSet<string>(StringComparer.Ordinal);
 
-        internal static bool Configure(Type type, IModApi modApi, string blocksFolder, string templatesFolder)
+        internal static bool Configure(Type type, Type fileType, PropertyInfo fileProperties,
+            IModApi modApi, string blocksFolder, string templatesFolder)
         {
             collectionType = type;
+            configFileType = fileType;
+            configFileProperties = fileProperties;
             api = modApi;
             blockFragments = Directory.Exists(blocksFolder) ? Directory.GetFiles(blocksFolder, "*.ecf") : new string[0];
             templateFragments = templatesFolder != null && Directory.Exists(templatesFolder)
@@ -1091,6 +1328,28 @@ namespace RE2Extended.Runtime
                 null);
 
             return elementType != null && elementsField != null && nameField != null && readEcfMethod != null;
+        }
+
+        internal static void TryMergeConfigFile(object configFile, bool loaded, string configName)
+        {
+            if (!loaded || configFile == null || configFileType == null || configFileProperties == null)
+                return;
+            if (!configFileType.IsInstanceOfType(configFile))
+                return;
+            if (!string.Equals(configName, "BlocksConfig", StringComparison.Ordinal) &&
+                !string.Equals(configName, "Templates", StringComparison.Ordinal))
+                return;
+
+            try
+            {
+                object collection = configFileProperties.GetValue(configFile, null);
+                if (collection != null)
+                    TryMerge(collection);
+            }
+            catch (Exception error)
+            {
+                LogOnce("ConfigFile.Load merge failed: " + error.GetType().Name + ": " + error.Message);
+            }
         }
 
         internal static void TryMerge(object collection)

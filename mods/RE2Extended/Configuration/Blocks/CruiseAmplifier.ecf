@@ -13,6 +13,7 @@
   Material: Device
   Shape: ModelEntity
   ShowBlockName: true
+  TemplateRoot: CruiseAmplifierCVBlocks
   Model: @models/Blocks/Spaceship/CapacitorPrefab
   Mesh-Damage-1: Mesh/D0
   Mesh-Damage-2: Mesh/D1
@@ -51,6 +52,34 @@
   BlastRadius: 4
   BlastDamage: 800
   Radiation: 2.8, display: RadiationLevel
+  ShowUser: Yes
+}
+
+# Inventory/build-menu group. Vanilla thrusters use the same pattern: the
+# invisible *Blocks entry carries the ship-type suffix, while the placed child
+# block keeps the short name.
+{ +Block Name: CruiseAmplifierCVBlocks
+  IndexName: RE2Extended
+  Group: cpgTransportation
+  Material: Device
+  Shape: Invisible
+  Place: Free
+  DropMeshfile: Entities/Misc/DropContainerNewPrefab
+  StackSize: 1000
+  Category: Devices
+  CustomIcon: CapacitorMS
+  ChildBlocks: "CruiseAmplifierCV"
+  AllowPlacingAt: "MS", display: true
+  SizeInBlocks: "2,1,1", display: true
+  BlockColor: "110,110,110"
+  Info: bkiCruiseAmplifierCV, display: true
+  IsOxygenTight: false, display: true
+  Mass: 4500, type: float, display: true, formatter: Kilogram
+  Volume: 800, type: float, display: true, formatter: Liter
+  HitPoints: 4500, type: int, display: true
+  EnergyIn: 750, type: int, display: true, formatter: Watt
+  CPUIn: 5000, type: int, display: true
+  MarketPrice: 48584, display: true
   ShowUser: Yes
   UnlockCost: 12, display: true
   UnlockLevel: 15, display: true

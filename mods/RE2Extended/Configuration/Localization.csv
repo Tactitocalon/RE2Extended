@@ -1,0 +1,8 @@
+Key,English
+CruiseAmplifier,Cruise Amplifier
+CruiseAmplifierCV,Cruise Amplifier
+CruiseAmplifierSV,Cruise Amplifier
+CruiseAmplifierCVBlocks,Cruise Amplifier (CV)
+CruiseAmplifierSVBlocks,Cruise Amplifier (SV)
+bkiCruiseAmplifierCV,"Cruise Amplifiers are standard upgrades for commercial vessels for improving sublight travel times. They increase the maximum velocity of the ship, but require shields to be down to function. Additionally, they automatically shut off when under fire. Removing a cruise amplifier will activate the safety lockout for 20 seconds.\nIn space:\n1 amplifier: 115 m/s, 2 amplifiers: 130 m/s, 3 amplifiers: 145 m/s, 4 amplifiers: 160 m/s\nIn atmosphere:\n1 amplifier: 65 m/s, 2 amplifiers: 70 m/s, 3 amplifiers: 75 m/s, 4 amplifiers: 80 m/s"
+bkiCruiseAmplifierSV,"Cruise Amplifiers are standard upgrades for commercial vessels for improving sublight travel times. They increase the maximum velocity of the ship, but require shields to be down to function. Additionally, they automatically shut off when under fire. Removing a cruise amplifier will activate the safety lockout for 20 seconds.\nIn space:\n1 amplifier: 160 m/s, 2 amplifiers: 200 m/s\nIn atmosphere:\n 1 amplifier: 80 m/s, 2 amplifiers: 100 m/s"

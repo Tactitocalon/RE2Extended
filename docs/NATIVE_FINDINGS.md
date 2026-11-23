@@ -180,15 +180,28 @@ Reforged Eden 2 files, and let it raise the CV speed decision from 300 to 600.
 
 `Content/Mods` mods are loaded by `ModManager`/`GroupLayout` as DLL-only mods.
 There is no automatic provider for `Content/Mods/<mod>/Configuration/*.ecf`.
-`DirectoryFactory.RemoveSymbol(...)` is the ECF/config file loader used by the
-config editor and console commands, not by the mod loader. A DLL mod therefore
-cannot simply ship a `BlocksConfig.ecf` and expect it to be merged.
+A mod folder's `Configuration` tree is not scanned.
 
-Prototype solution: Harmony-postfix the `DynamicPropertiesCollection` loaders
-(`ReadEcf`, `LoadBinary`, `Read`) and append one `Block` element parsed from the
-mod's own `Configuration/GigaSpeedBooster.ecf` when a block collection is
-recognised. The merge then calls `ApplyAllReferences()` so `Ref` inheritance is
-resolved. This happens in memory only.
+Build 5232 does contain one native config override: `DirectoryFactory.RemoveSymbol(name, ...)`
+checks for `Content/Mods/<name>.ecf` and, when there is no active scenario config
+path, loads that file as the **entire** named config via
+`new ConfigFile("Content/Mods", name, ...)`. All normal configs (including
+`BlocksConfig`, `ItemsConfig`, `Templates`) are dispatched through this method by
+`FunctionSettingsConnectionToken.CloseXmlFile`. It is not a fragment merge:
+`EcfFile` has no include/append directive. When a scenario `Content` path is
+active (the normal RE2 gameplay case), the scenario configuration is used and
+the `Content/Mods/<name>.ecf` override is skipped. It therefore cannot extend
+RE2 with a few extra blocks.
+
+RE2Extended implementation: Harmony-postfix `ConfigFile.Load(string,string,...)`
+and merge the mod's block/template fragments when the named config is
+`BlocksConfig` or `Templates`. This is the single named-config boundary and it
+runs after the ECF/binary loader has populated `PropertiesCollection`, but before
+the game dispatches the config. A `DynamicPropertiesCollection` postfix
+(`ReadEcf`, `LoadBinary`, `Read`) remains as a fallback for builds where
+`ConfigFile.Load` cannot be resolved. The merge appends parsed elements and calls
+`ApplyAllReferences()` so `Ref` inheritance is resolved. This happens in memory
+only.
 
 ### Block ID / Reforged Eden 2 compatibility
 
@@ -227,6 +240,57 @@ Second live test: the safety check skipped both blocks because the parsed fragme
 now has an explicit block-name -> base-block map (`GigaSpeedBooster -> LightMS01`,
 `InfiniteFuelGenerator -> ContainerMS01`) and uses the ECF `Reference` only as a
 fallback. This avoids depending on parser behavior for fragment `Ref` handling.
+
+### Inventory name vs placed block name (build 5232, static)
+
+Vanilla thrusters do not derive the ship-type suffix from `AllowPlacingAt` at
+runtime. They use two block entries:
+
+- An invisible `...Blocks` group with `ChildBlocks: "..."`. This is the
+  inventory/build-menu item and carries the long display key, e.g.
+  `ThrusterMSMediumT2Blocks = "Medium Plasma Thrusters (CV)"`.
+- The actual placeable child block, whose `TemplateRoot` points at the group and
+  whose localization key is the short placed name, e.g.
+  `ThrusterMSMediumT2 = "Medium Plasma Thruster"`.
+
+`RegistryOptions.Init()` loads `TemplateRoot` into `generatorLength` and
+`ChildBlocks` into the child list; the inventory/build UI and placement resolve
+the group to its child block. No display-name UI patch is required.
+
+RE2Extended uses the same pattern with `CruiseAmplifierCVBlocks` /
+`CruiseAmplifierSVBlocks` as single-child groups. The group keys carry `(CV)` /
+`(SV)`; the actual `CruiseAmplifierCV` / `CruiseAmplifierSV` keys stay
+`Cruise Amplifier` for the placed block.
+
+Icons are separate: inventory/build entries use `CustomIcon`, but the control
+panel path `BuilderContextConnectionToken.AllocateEmulator()` assigns
+`UISprite.spriteName = registryOptions.CloneOutline()` directly. For custom
+blocks that sprite name has no atlas entry. RE2Extended therefore sets
+`CustomIcon: CapacitorMS` and installs a narrow `UISprite.spriteName` setter
+prefix that aliases the four Cruise Amplifier block names to `CapacitorMS`.
+
+### Localization loading (build 5232, static)
+
+The base localization is `Content/Extras/Localization.csv`, read by
+`Localization.loadFunction` from `NGUIAssembly.Localization`. The game sets that
+delegate in `GameStartup`/`GameLoader`. A scenario may supply
+`Extras/Localization.csv`; `DiskEditor.FindResource()` finds it and
+`FunctionSettingsConnectionToken.CloseXmlFile()` merges it with
+`Localization.LoadCSV(bytes, merge: true)`.
+
+There is no native `Content/Mods` localization provider. For a DLL mod the
+closest native merge path is to ship a CSV fragment and call the public
+`Localization.LoadCSV(byte[], merge: true)` after the base table has loaded.
+`Localization.Set(key, value)` is a lower-level, language-independent fallback:
+it writes to `mOldDictionary` and does not broadcast `OnLocalize`. It works for
+English-only prototypes but is not a localization-table merge.
+
+The dedicated `Assembly-CSharp` has the config/ECF types but no `Localization`
+type; localization is a client concern.
+
+RE2Extended now ships `Configuration/Localization.csv` and merges it through
+`Localization.LoadCSV(byte[], merge: true)` after the base dictionary is ready.
+`Localization.Set` remains only as a fallback for an unavailable CSV/table.
 
 ### Runtime verification still needed
 

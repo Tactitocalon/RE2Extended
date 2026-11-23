@@ -33,8 +33,13 @@ same activateable behaviour as the RE2 decorative wall console.
 4. The mod targets `PfServer,Dedi,Client`; the client process owns the
    client-authoritative speed patch.
 
-Localization for the Cruise Amplifier is injected at runtime. Full localization
-and the inventory-name suffix are tracked in [`TODO.md`](TODO.md).
+Localization for the Cruise Amplifier ships as
+`Configuration/Localization.csv` and is merged through the game's native
+`Localization.LoadCSV(..., merge: true)` path. Inventory/build-menu names use
+invisible `CruiseAmplifierCVBlocks` / `CruiseAmplifierSVBlocks` groups, matching
+the vanilla thruster pattern: `Cruise Amplifier (CV)` / `(SV)` in inventory,
+`Cruise Amplifier` when placed. Non-English columns are tracked in
+[`TODO.md`](TODO.md).
 
 ## Planned / documented
 

@@ -2,45 +2,40 @@
 
 ## Localization
 
-Status: partially implemented for the first release. The Cruise Amplifier display
-names and descriptions are injected at runtime through the game's
-`Localization.Set(string,string)` method (time-of-writing English-only). Full
-CSV/localization-table merging and non-English translations remain deferred.
+Status: English localization uses `Configuration/Localization.csv`, merged with
+`Localization.LoadCSV(byte[], merge: true)` after the base table loads. The
+language-independent `Localization.Set` path remains only as a fallback when the
+CSV or base table is unavailable.
 
-The Cruise Amplifier has injected English entries. Future devices will still
-fall back to internal identifiers until they receive entries, and non-English
-languages fall back to English.
+Build-5232 finding: there is no native `Content/Mods` localization provider.
+`Localization.LoadCSV(byte[], merge: true)` is the correct native table-merge
+path; `Set(key, value)` only updates the language-independent fallback dictionary.
 
 TODO:
 
-- Consider replacing the hardcoded runtime entries with a `Localization.csv`
-  fragment merged through `Localization.LoadCSV` or `Localization.Set` at a
-  safe load point.
-- If possible, merge `CruiseAmplifierCV`, `CruiseAmplifierSV`, and their `Info`
-  keys into the in-memory localization data.
-- If not possible, document the limitation and decide whether a scenario/CSV
-  sidecar or a small UI patch is acceptable.
-- Add proper English display names and descriptions for:
-  - `CruiseAmplifierCV`
-  - `CruiseAmplifierSV`
-  - future devices
-- Verify the icon path: `CustomIcon: CapacitorMS` versus model thumbnail.
-- Verify display names in the build menu, tech tree, control panel, and
-  blueprint editor.
+- Add non-English columns to `Configuration/Localization.csv`.
+- Add entries for future devices as they are introduced.
+- Verify the `CapacitorMS` icon in the inventory, build menu, control-panel
+  device list, tech tree, and blueprint editor.
+- Verify display names in the same UI surfaces.
 
 ## Display-name suffix
 
-The game appears to use the block `Name` localization key for both the placed
-block name and the inventory name. The first implementation therefore renders
-both as "Cruise Amplifier". The requested inventory-only suffix
-("Cruise Amplifier (CV)" / "Cruise Amplifier (SV)") likely requires either a
-separate inventory item name path or a small UI/display-name patch.
+Implemented without a UI patch. Vanilla thrusters use an invisible `*Blocks`
+group block with `ChildBlocks`; the placed child block points back with
+`TemplateRoot`. The group's localization key carries the ship-type suffix, while
+the child block's key is the short placed name.
+
+The Cruise Amplifiers now follow the same pattern:
+
+- `CruiseAmplifierCVBlocks` / `CruiseAmplifierSVBlocks` are the inventory groups.
+- Their names are `Cruise Amplifier (CV)` / `Cruise Amplifier (SV)`.
+- `CruiseAmplifierCV` / `CruiseAmplifierSV` remain `Cruise Amplifier` when placed.
 
 TODO:
 
-- Confirm whether any native block property provides a separate inventory label.
-- If not, add a narrowly scoped display-name patch or accept the same name in all
-  contexts.
+- Verify in-game that the single-child groups appear as direct inventory entries
+  rather than requiring a variant-selection step.
 
 ## Other deferred work
 
