@@ -1,0 +1,39 @@
+# Empyrion Extended Test Mod - custom CV device.
+#
+# Fixed block ID: 1565
+#
+# Why 1565:
+#   - It is inside Empyrion's documented fixed block ID range (0..2048).
+#   - It is unused by vanilla, all installed built-in scenarios, and Reforged
+#     Eden 2's BlocksConfig.ecf (verified against the installed 3143225812 copy).
+#   - It is below 2048, outside the range the game uses for RE2's named block
+#     auto-assignment (the current RE2 save maps named blocks to 2048..3563).
+#   - It is a gap left by older/removed block definitions, not a number in the
+#     middle of an active contiguous vanilla/RE2 block family.
+#
+# This is still a prototype reservation. If a future vanilla/RE2 update starts
+# using 1565, change this one value and the Constant in ExtendedTestRuntime.cs.
+
+{ +Block Id: 1565, Name: GigaSpeedBooster
+  Ref: LightMS01
+  Class: Light
+  Info: bkiLight, display: true
+  CustomIcon: LightMS01
+  Model: @models/Blocks/Mothership/LightMS01Prefab
+  Group: cpgLight
+  IndexName: Light
+  AllowPlacingAt: "MS", display: true
+  SizeInBlocks: "1,1,1", display: true
+  HitPoints: 500, type: int, display: true
+  Mass: 100, type: float, display: true, formatter: Kilogram
+  Volume: 20, type: float, display: true, formatter: Liter
+  EnergyIn: 1, type: int, display: true, formatter: Watt
+  CPUIn: 10, type: int, display: true
+  Category: Devices
+  IsActivateable: true
+  ShowBlockName: true
+  ShowUser: Yes
+  UnlockCost: 0, display: false
+  UnlockLevel: 1, display: false
+  TechTreeNames: "Capital Vessel"
+}

@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net461</TargetFramework>
+    <AssemblyName>EmpyrionExtendedTestMod.Runtime</AssemblyName>
+    <RootNamespace>EmpyrionExtendedTestMod.Runtime</RootNamespace>
+    <LangVersion>7.3</LangVersion>
+    <OutputPath>..\..\artifacts\build\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <Deterministic>true</Deterministic>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GameRoot Condition="'$(GameRoot)' == ''">F:\SteamLibrary\steamapps\common\Empyrion - Galactic Survival</GameRoot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EmpyrionExtendedTestMod.Loader\EmpyrionExtendedTestMod.Loader.csproj" />
+    <PackageReference Include="Lib.Harmony" Version="2.4.3" />
+    <Reference Include="ModApi">
+      <HintPath>$(GameRoot)\Client\Empyrion_Data\Managed\ModApi.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(GameRoot)\Client\Empyrion_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

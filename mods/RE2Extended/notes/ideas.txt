@@ -1,0 +1,185 @@
+Warp Navigation Beacons
+ - SV / CV / BA
+ - allow a SV/CV/BA to be directly warped to
+ - can only be warped to if the owning vessel is in space
+ - Navigation Beacon: Has a notable power and consumption cost: 2000 W, 1000 CPU for CV/BA, 100 CPU for SV.
+   Use "Antenna11" model (1x5x1)
+ - Self-Powered Navigation Beacon: Doesn't require power or CPU, but more exotic resource cost and larger size.
+   Use "Antenna10" model (1x8x1)
+
+Warp Navigation Computer
+ - CV
+ - allows Navigation Beacons to be jumped to directly
+ - basically, allows you to warp and end up close to the target
+ - can only be used in space
+ - Not sure how the implementation will work. Maybe it's a device that the player can "fire" like a gun, which
+   opens a menu while piloting to initiate the warp.
+ - Needs to respect jump range requirements.
+ - Warp Navigation Computer: Mild power cost (100W), no CPU cost. Expensive craft cost - optronics?
+   Use ComputerStation_C01 model.
+   Warps randomly between 1-5 KM of the target.
+ - Advanced Warp Navigation Computer: Higher power cost (250W). More expensive and higher tech, need some exotic resource.
+   Warps randomly between 500-1000m of the target.
+ - Exclude SV until we can figure how to make the model not stupid (needs to be bigger? IDK.)
+
+Autopilot Command Terminal
+ - CV / BA
+ - Allows for a ship with an Autopilot Computer Cluster to be warped in to your current location (within 500-1000m).
+ - Summoned ships will UNDOCK if required first before warping.
+ - Use ComputerStation_C02 model for the Autopilot Command Terminal (BA, CV or SV). Uses 250W.
+ - Exclude SV until we can figure how to make the model not stupid (needs to be bigger? IDK.)
+
+Autopilot Computer Cluster
+ - CV
+ - Requires an Advanced Warp Navigation Computer on the ship to function.
+ - Use Eden_ServerConsole01 model for the Autopilot Computer Cluster. Uses 1000W and 5000 CPU.
+ - Exclude SV until we can figure how to make the model not stupid (needs to be bigger? IDK.)
+
+C3 Computer
+ - CV
+ - When used, you can input an "C3 channel" (a number between 1 and 9999).
+ - All ships with a C3 Computer on the same C3 channel share radar returns in the same playfield.
+ - Using active radar on a ship with a C3 Computer triggers active radar for all other C3 Computer ships in the network
+ in the same playfield.
+ - 150W, 5000 CPU
+ - Use ConsoleLargeMS01 for the model
+
+Shield Reserve Cell
+ - CV (maybe SV in the future)
+ - Can be manually used like a "gun" to instantly increase the shield amount (but not over the maximum).
+ - Each time it's clicked, a Shield Reserve Cell is used (use the "power off" model for a depleted cell). Won't restore
+ shields unless the cell will restore its full shield amount (so if your shields are near full or full, it won't activate).
+ - Each Shield Reserve Cell instantly recharges 8000 shield (but not over the maximum shield amount).
+ - Explosive, like generators.
+ - Use "PowerRegulator" model.
+ - 500W power consumption, 1000 CPU cost.
+ - Requires 15 minutes at full shields to recharge. Check every 30 seconds to see if shields are full. If interrupted, the
+ timer resets.
+
+Cruise Amplifier
+ - SV / CV
+ - Use CapacitorMS model.
+ - Increases the maximum speed of the ship, but cannot be used in combat or with an active shield.
+ - Use combat check similar to Warp Drives.
+ - For CV's in space: 1 capacitor - 115 m/s, 2 capacitor: 130 m/s, 3 capacitor: 145 m/s, 4 capacitor: 160 m/s
+ - For CV's in atmo: 1 capacitor - 65 m/s, 2 capacitor: 70 m/s, 3 capacitor: 75 m/s, 4 capacitor: 80 m/s
+ - For SV's in space: 1 capacitor - 160 m/s, 2 capacitor: 200 m/s
+ - For SV's in atmo: 1 capacitor - 80 m/s, 2 capacitor - 100 m/s
+ - Additional capacitors are allowed to be placed beyond the limit, but provide no speed benefit.
+ - Cruise Amplifier (CV):
+   Titanium Plates x16, Advanced Capacitor x24, Electronics x36, Computer x10, Aluminium Foil x24,
+   Advanced Electronics x24, Flux Coil x8, Energy Regulator x4, Plasma Converter x4, Graphite x12
+   Hit points: 4500
+   Energy in: 750W
+   CPU: 5000
+   Airtight: NO
+ - Research Tech: Cruise Amplifier (CV), 12 points, under Capital Vessel. Level 15 unlock, requires Small Plasma Thruster (CV).
+ - Cruise Amplifier (SV):
+   Titanium Plates x4, Advanced Capacitor x4, Electronics x16, Computer x2, Aluminium Foil x8,
+   Advanced Electronics x4, Flux Coil x1, Energy Regulator x2, Plasma Converter x1, Graphite x4
+   Hit points: 1750
+   Energy in: 200W
+   CPU: 300
+   Airtight: NO
+ - Research Tech: Cruise Amplifier (SV), 11 points, under Small Vessel. Level 10 unlock, requires Small Plasma Thruster (SV).
+
+Boost Capacitor
+ - SV / CV
+ - Use ScifiContainerEnergy model.
+ - Increases the maximum amount of boost (thruster boost) that is available by 10%.
+ - Explosive!
+ - TODO: figure out balance values.
+
+Constructor Manager
+ - Use ConsoleDesk_C05
+ - Has a new UI - the mass constructor UI.
+ - Has a "Job Request" and a "Templates" search, like a normal constructor.
+ - "Job Request" is NOT like the actual constructor queue - it's a list of items to submit to all the constructors.
+ - The Job Request window has a "Submit" button, and a "Clear" button.
+ - Has all the constructor recipes (use Universal Constructor?)
+ - Instead of Input / Output, it has an interface that allows the user to "slave" constructors to the Constructor Manager.
+ It also shows each slaved constructor, what item it is currently working on, and how many number of items are left for that constructor.
+ You can cancel the queue for each individual constructor, or all at once with a "Cancel All" buttons.
+- You can queue up a bunch of items to be submitted to the constructors as a bulk build request, then hit submit. The requested recipes
+are then distributed evenly to all slaved constructors that can actually process the recipe.
+
+Fuel Distribution Regulator
+ - CV / BA
+ - Increases the amount of power generated by generators, based on the number of fuel tanks you have.
+ - Also increases the effectiveness of plasma turbines, based on the number of fuel tanks you have.
+ - It's designed to give you an incentive to have lots of fuel tanks.
+ - 0.25% / 0.5% / 1% increased power for small / medium / large fuel tanks, up to a maximum of 25%.
+ - Same ratio for plasma turbine effectiveness, up to a maximum of 25%.
+ - This is implemented by the Fuel Distribution Regulator changing its own power out / consumption reduction based on
+ what other devices exist on the vessel, rather than mutating the generators / plasma turbines directly.
+ - Use LandClaimDevice for the model.
+ - Very explosive, like generators.
+ - Limit 2. 10000 CPU cost. (so maximum performance is 25 fuel tanks + 2 fuel distribution regulators)
+
+
+Other models to reuse:
+ - LandClaimDevice
+ - OfflineProtector
+ - HeavyShuttlePad01 maybe could be used as part of Factory Management? It's very cool!
+ - The oxygen/hydrogen/water generators could be reused. Same with the portable constructor and thermal regulator.
+ - ConstructorSV - used for some kind of ammo plant constructor? IDK.
+ - The various RCS devices (IDK what for)
+
+SV Flare Launchers
+ - How do they work?
+ - Can we make automated versions or something?
+ - The flare launcher produces an invisible sphere behind it for around 5 seconds per shot as part of the firing effect.
+   The sphere will block any shots that pass through it and stop turrets from aiming at targets through it since it's treated as a physical obstruction to turret targeting.
+
+Anti Missile Systems
+ - no idea how the fuck we can make guns that shoot down missiles
+ - maybe fire 0 damage projectiles that "look" like they're doing something
+ - and then just script kill the incoming missile with a % chance IF the turret is firing
+
+Decoy Module
+ - use the RCS model
+ - vastly cheaper decoys of every type
+ - also can output a signal, always outputs ON (so you can detect if it's destroyed)
+ - thruster decoy: limit 2
+ - mounted weapon: limit 1
+ - turret: limit 1
+ - generator: limit 2
+ - warp drive: limit 1
+ - mass: 3t, HP: 10000 (a slightly shittier hardened steel block)
+ - also there is the "Damage Sensor Module", which is like the decoy, but costs 1 CPU and doesn't actually decoy, only used for signal output. Maybe two types - damage detection (triggers on any damage), and destroyed detection?
+
+Sensor Augments
+ - class of stuff that improves sensor detection
+ - ability to identify stuff faster?
+
+
+
+
+
+FACTORY MANAGEMENT
+
+Factories are BA-only machines that can perform bulk operations over a long period of time.
+They might allow for higher efficiencies than constructors or smelters (eg. performing smelts with higher yields than the
+regular recipes).
+They need to be able to operate while not loaded (aka, we should calculate how long it's been until it was loaded, and
+apply the operations retroactively).
+
+Various factories might require different environmental conditions:
+ - Some processes might require zero, normal or high gravity.
+ - Mining machines are also a possibility (use the mining deco blocks?) to provide passive income, depending on planet type.
+ - They might also just be required for certain processes (eg. "providing" a non-item resource to allow a certain factory process)
+
+Factory items might not be handled like regular Empyrion items. No way to directly withdraw/retrieve them? IDK.
+
+In the future, maybe have ways for Zirax / Pirates to attack bases with certain high value factories?
+
+Factory Manager
+ - Some kind of block that orchestrates a factory. Limit 1.
+ - The "master" block for the factory. Needs to know how to calculate power production / consumption.
+ - Also the main interface. Shows any problems and factory status?
+
+
+Matter Transmitter / Receiver
+ - use the fuck-huge satellite dish blocks for this?
+ - BA only?
+ - allows you to link factories in the same star system for export/import of materials.

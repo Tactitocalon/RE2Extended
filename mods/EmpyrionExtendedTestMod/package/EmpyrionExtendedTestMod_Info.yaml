@@ -1,0 +1,5 @@
+﻿Name: Empyrion Extended Test Mod
+Description: Test mod. CV speed 300/600 with Giga Speed Booster; Infinite Fuel Generator on powered CV/SV/HV.
+Author: Empyrion Extended Test Mod contributors
+Version: 0.7.0
+ModTargets: PfServer,Dedi,Client

@@ -1,0 +1,29 @@
+# Normalize text files on commit; keep Windows scripts usable on checkout.
+* text=auto
+
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+*.cs text
+*.md text
+*.yaml text
+*.yml text
+*.json text
+*.ecf text
+*.txt text
+*.csproj text
+*.sln text
+
+# Declare binary types so a deliberately tracked file is never line-normalized.
+*.dll binary
+*.pdb binary
+*.mdb binary
+*.exe binary
+*.lib binary
+*.exp binary
+*.zip binary
+*.7z binary
+*.rar binary
+*.tar binary
+*.gz binary

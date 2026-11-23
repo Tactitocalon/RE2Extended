@@ -1,0 +1,54 @@
+# RE2Extended - Cruise Amplifier SV
+#
+# Named block: no fixed Block Id. The game assigns a dynamic named-block ID.
+# Detection is by block name only; no fixed ID is used by the runtime.
+# Powered, activateable, no F-button interface. CapacitorMS model and 2x1x1 hitbox.
+
+{ +Block Name: CruiseAmplifierSV
+  Material: Device
+  Shape: ModelEntity
+  ShowBlockName: true
+  Model: @models/Blocks/Spaceship/CapacitorPrefab
+  Mesh-Damage-1: Mesh/D0
+  Mesh-Damage-2: Mesh/D1
+  Mesh-Damage-3: Mesh/D2
+  Mesh-Damage-4: Mesh/D3
+  DropMeshfile: Entities/Misc/DropContainerNewPrefab
+  Place: Free
+  RemoveOnSI: true
+  StabilitySupport: false
+  IsAccessible: true, type: bool
+  IsActivateable: true
+  IsActivateableInCP: true
+  IsActivatedOnPlace: true
+  IsLockable: true
+  IsDuplicateable: false
+  AllowedInBlueprint: true
+  IsOxygenTight: false, display: true
+  AllowPlacingAt: "SS", display: true
+  SizeInBlocks: "2,1,1", display: true
+  SymType: 4
+  StackSize: 1000
+  BlockColor: "110,110,110"
+  Category: Devices
+  Group: cpgTransportation
+  IndexName: RE2Extended
+  Info: bkiCruiseAmplifierSV, display: true
+  CustomIcon: CapacitorMS
+  Mass: 120, type: float, display: true, formatter: Kilogram
+  Volume: 31.3, type: float, display: true, formatter: Liter
+  HitPoints: 1750, type: int, display: true
+  EnergyIn: 200, type: int, display: true, formatter: Watt
+  CPUIn: 300, type: int, display: true
+  MarketPrice: 10629, display: true
+  BlastParticleName: @rg_projectiles/RG_BlastPlasmaBlueL2
+  BlastParticleIndex: 0
+  BlastRadius: 4
+  BlastDamage: 525
+  Radiation: 2.75, display: RadiationLevel
+  ShowUser: Yes
+  UnlockCost: 11, display: true
+  UnlockLevel: 10, display: true
+  TechTreeParent: ThrusterSVSmallT2
+  TechTreeNames: "Small Vessel"
+}

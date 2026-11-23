@@ -1,0 +1,59 @@
+# RE2Extended - Cruise Amplifier CV
+#
+# Named block: no fixed Block Id. The game assigns a dynamic named-block ID.
+# Detection is by block name only; no fixed ID is used by the runtime.
+# Powered, switchable, no F-button interface. The CapacitorMS model is used as
+# the actual model and 2x1x1 hitbox.
+#
+# Do not add Ref: Eden_ConsoleWallBlueThin here: it would inherit MaxCount 64,
+# ForceMaxCount, TemplateRoot Eden_DecoBlocks, Collide bullet/rocket and
+# decorative mass/volume. All required values are specified explicitly.
+
+{ +Block Name: CruiseAmplifierCV
+  Material: Device
+  Shape: ModelEntity
+  ShowBlockName: true
+  Model: @models/Blocks/Spaceship/CapacitorPrefab
+  Mesh-Damage-1: Mesh/D0
+  Mesh-Damage-2: Mesh/D1
+  Mesh-Damage-3: Mesh/D2
+  Mesh-Damage-4: Mesh/D3
+  DropMeshfile: Entities/Misc/DropContainerNewPrefab
+  Place: Free
+  RemoveOnSI: true
+  StabilitySupport: false
+  IsAccessible: true, type: bool
+  IsActivateable: true
+  IsActivateableInCP: true
+  IsActivatedOnPlace: true
+  IsLockable: true
+  IsDuplicateable: false
+  AllowedInBlueprint: true
+  IsOxygenTight: false, display: true
+  AllowPlacingAt: "MS", display: true
+  SizeInBlocks: "2,1,1", display: true
+  SymType: 4
+  StackSize: 1000
+  BlockColor: "110,110,110"
+  Category: Devices
+  Group: cpgTransportation
+  IndexName: RE2Extended
+  Info: bkiCruiseAmplifierCV, display: true
+  CustomIcon: CapacitorMS
+  Mass: 4500, type: float, display: true, formatter: Kilogram
+  Volume: 800, type: float, display: true, formatter: Liter
+  HitPoints: 4500, type: int, display: true
+  EnergyIn: 750, type: int, display: true, formatter: Watt
+  CPUIn: 5000, type: int, display: true
+  MarketPrice: 48584, display: true
+  BlastParticleName: @rg_projectiles/RG_BlastPlasmaBlueL2
+  BlastParticleIndex: 0
+  BlastRadius: 4
+  BlastDamage: 800
+  Radiation: 2.8, display: RadiationLevel
+  ShowUser: Yes
+  UnlockCost: 12, display: true
+  UnlockLevel: 15, display: true
+  TechTreeParent: ThrusterMSSmallT2
+  TechTreeNames: "Capital Vessel"
+}

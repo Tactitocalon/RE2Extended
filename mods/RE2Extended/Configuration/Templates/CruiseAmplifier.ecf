@@ -1,0 +1,40 @@
+# RE2Extended - Cruise Amplifier recipes
+#
+# MarketPrice on the block definitions is the recipe material value:
+#   CV = 48584
+#   SV = 10629
+# Craft times are provisional and should be rebalanced.
+
+{ +Template Name: CruiseAmplifierCV
+  CraftTime: 30
+  Target: "SmallC,AdvC"
+  { Child Inputs
+    TitanPlates: 16
+    CapacitorComponent: 24
+    Electronics: 36
+    Computer: 10
+    AluminiumCoil: 24
+    Oscillator: 24
+    FluxCoil: 8
+    EnergyMatrix: 4
+    PlasmaConverter: 4
+    Graphite: 12
+  }
+}
+
+{ +Template Name: CruiseAmplifierSV
+  CraftTime: 15
+  Target: "SmallC,LargeC,AdvC"
+  { Child Inputs
+    TitanPlates: 4
+    CapacitorComponent: 4
+    Electronics: 16
+    Computer: 2
+    AluminiumCoil: 8
+    Oscillator: 4
+    FluxCoil: 1
+    EnergyMatrix: 2
+    PlasmaConverter: 1
+    Graphite: 4
+  }
+}

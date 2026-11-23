@@ -1,0 +1,92 @@
+# ============================================================================
+# Empyrion modding workspace
+# ============================================================================
+
+# Generated research/decompilation workspace. Never commit game assemblies,
+# decompiled game code, extracted configs, saves or logs.
+/artifacts/
+**/artifacts/
+
+# Generated mod release packages. The source *_Info.yaml files remain tracked.
+mods/*/package/*/
+
+# .NET build output
+**/bin/
+**/obj/
+**/publish/
+/out/
+**/TestResults/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.DotSettings.user
+*.nupkg
+*.snupkg
+
+# Built binaries and debug symbols are excluded through the build/package/
+# artifacts directory rules above. They are intentionally not ignored globally
+# so that a reviewed managed dependency can be added deliberately. Any binary
+# that is tracked must be declared in .gitattributes.
+
+# Logs, dumps and temporary build files
+*.log
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+*~
+*.trx
+*.coverage
+coverage.*
+CrashDumps/
+dumps/
+[Ll]ogs/
+
+# Empyrion game/save/scenario output that must never enter source history
+[Ss]aves/
+*.save
+*.sav
+*.epb
+*.bpyaml
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.ply
+
+# Local archives and reverse-engineering inputs are excluded through the
+# artifacts/ and package output rules above. Archives are intentionally not
+# ignored globally so a reviewed fixture can be added deliberately.
+
+# Third-party reference material is kept outside this project's source history
+/third-party/
+
+# IDE / editor state, including IntelliJ run configurations
+.idea/
+.run/
+.vs/
+.vscode/
+*.iml
+
+# OS files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Local environment/secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials*
+
+# Python helpers
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/

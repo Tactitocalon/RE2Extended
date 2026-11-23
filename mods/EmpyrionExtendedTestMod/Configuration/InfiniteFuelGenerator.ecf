@@ -1,0 +1,36 @@
+# Empyrion Extended Test Mod - Infinite Fuel Generator.
+#
+# Fixed block ID: 1564
+#
+# 1564 is unused by vanilla, all installed built-in scenarios, and the installed
+# Reforged Eden 2 BlocksConfig.ecf. It is below 2048 and outside the current
+# RE2 named-block auto-assignment range (2048..3563). If a future update uses
+# 1564, change this value and the BlockId constant in ExtendedTestRuntime.cs.
+#
+# The block is a cargo-container clone. The runtime adds one FusionCell item
+# every 10 seconds. In Reforged Eden 2, FusionCell is localized as
+# "Promethium Hydrocell".
+
+{ +Block Id: 1564, Name: InfiniteFuelGenerator
+  Ref: ContainerMS01
+  Class: Container
+  IndexName: Container
+  Group: cpgCargoBox
+  Info: bkiContainer, display: true
+  CustomIcon: ContainerMS01
+  AllowPlacingAt: "MS,SS,GV", display: true
+  SizeInBlocks: "1,1,1", display: true
+  VolumeCapacity: 125, type: float, display: true, formatter: Liter
+  HitPoints: 250, type: int, display: true
+  Mass: 100, type: float, display: true, formatter: Kilogram
+  CPUIn: 15, type: int, display: true
+  EnergyIn: 1, type: int, display: true, formatter: Watt
+  IsActivateable: true
+  IsActivateableInCP: true
+  IsLockable: true
+  ShowBlockName: true
+  ShowUser: Yes
+  UnlockCost: 0, display: false
+  UnlockLevel: 1, display: false
+  TechTreeNames: "Capital Vessel,Small Vessel"
+}

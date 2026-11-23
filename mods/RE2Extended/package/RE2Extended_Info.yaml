@@ -1,0 +1,5 @@
+Name: RE2Extended
+Description: "RE2 Extended - adds additional functionality on top of Reforged Eden 2 Beta."
+Author: Narks
+Version: 0.1.0
+ModTargets: PfServer,Dedi,Client
