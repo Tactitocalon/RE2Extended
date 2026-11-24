@@ -484,6 +484,49 @@ RE2 currently contains **1517 `Block Name:` entries**, occupying named IDs
 (`3564..4095`). Named IDs are assigned in config order and persisted in a save's
 `blocksmap.dat`; new entries append rather than renumbering old ones.
 
+### Block-map load/ID-assignment lifecycle (build 5232)
+
+Static inspection of the PlayfieldServer `Assembly-CSharp` found the block-name
+map implementation in `Assembly-CSharp.ProcessTablePageQueue`:
+
+- `RegisterAction(dir, file)` loads the save's `blocksmap.dat`.
+- `FreeAddin(start, end, DynamicPropertiesCollection)` assigns IDs for named
+  elements in the supplied config range. The block path calls this with
+  `start=2048`, `end=8192`.
+- `SearchToolbar(...)` / `UpdateDirectory()` persist the map when it is dirty.
+
+`Assembly-CSharp.DirectoryConverter.CopyXmlFile(DynamicPropertiesCollection,
+bool)` is the point that calls `FreeAddin(2048, 8192, config)` before the map is
+written. Injecting ECF fragments after this point is too late for an existing
+save to receive new named IDs. RE2Extended therefore installs a Harmony prefix
+on that method and merges the block fragments into the collection immediately
+before ID assignment. In-memory ID assignment now works and blueprint spawning
+with the injected blocks succeeds. The test utility
+`mods/RE2Extended/scripts/verify-blocksmap.ps1` parses a map and reports the
+record count, maximum ID, and required names.
+
+Live test caveat (2026-11-24): the early hook fired on an existing dedicated
+save, but the save's `blocksmap.dat` was not rewritten after playfield unload; it
+still contained the pre-mod 1517 entries. The in-memory mapping worked.
+
+To remove the dependency on map persistence and config order, RE2Extended also
+hooks the named-ID allocator itself. The allocator has the same effective shape
+in both full assemblies but different obfuscated names:
+
+| Process | Type | Allocator |
+| --- | --- | --- |
+| PlayfieldServer | `Assembly-CSharp.ProcessTablePageQueue` | `FreeAddin(int,int,DynamicPropertiesCollection)` |
+| Client | `Assembly-CSharp.EmulatorSetConnectionToken` | `DeployXmlFile(int,int,DynamicPropertiesCollection)` |
+
+It is resolved by signature, not by name. The hook pre-seeds RE2Extended block
+names from the highest named ID (`4095`) downward, using the map's own
+name→ID/ID→name dictionaries and its `CheckPage`/`FindDockingPane` equivalent.
+The native allocator then leaves those names alone. Matching client and server
+mod/scenario versions therefore compute the same high IDs even when
+`blocksmap.dat` is not rewritten. Existing mapped IDs are retained if present.
+The risk is named-ID-space exhaustion or divergence when RE2, another mod, or a
+different scenario version occupies the high range differently.
+
 ### Teleporter class
 
 The Teleporter block class is:

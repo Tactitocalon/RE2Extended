@@ -57,6 +57,35 @@ history.
 4. The mod targets `PfServer,Dedi,Client`; the client process owns the
    client-authoritative speed patch.
 
+### Block-ID upgrades
+
+Named blocks are assigned IDs by the game and persisted per save in
+`blocksmap.dat`. Existing IDs must never be renumbered.
+
+RE2Extended merges its ECF fragments before the game's named-block ID
+assignment and pre-seeds its named blocks from the top of the named-ID range
+(`4095` downward). This keeps RE2Extended IDs independent of RE2's low-to-high
+growth and avoids relying on `blocksmap.dat` being rewritten.
+
+The allocator is resolved by signature in both PlayfieldServer and Client, so
+both sides assign the same high IDs when they run the same mod and scenario
+versions. Existing mapped IDs are retained. If the high named-ID range is
+occupied differently, allocation can diverge or fail closed.
+
+Migration note: blocks placed before the high-ID scheme used low named IDs.
+Those world block IDs are not migrated automatically. Treat the first high-ID
+release as a save migration point for test structures, or add a world-ID
+migration step before enabling it on a save with placed RE2Extended blocks.
+
+Release checks:
+
+- Verify the new map count and appended IDs with
+  `scripts/verify-blocksmap.ps1` on a copy of the save.
+- Confirm a second restart does not add duplicate entries.
+- Confirm old blueprints and placed builds still load.
+- If the early merge is reported unavailable in the log, do not assume an
+existing save will receive new named IDs.
+
 Localization for the Cruise Amplifier ships as
 `Configuration/Localization.csv` and is merged through the game's native
 `Localization.LoadCSV(..., merge: true)` path. Inventory/build-menu names use

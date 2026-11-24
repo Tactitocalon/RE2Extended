@@ -54,13 +54,8 @@ namespace RE2Extended.Runtime
 
         private Dictionary<string, int> blockNameToId;
         private Dictionary<int, string> blockIdToName;
-        private bool firstEventLogged;
-        private bool firstComponentRemovalLogged;
         private bool failureLogged;
         private bool noMappingLogged;
-        private bool noLocalStructureLogged;
-        private bool noDeviceLogged;
-        private bool deviceFoundLogged;
 
         private VoiceInterfaceFeature(IModApi api, Type registryTokenType, Type controlTableType,
             Type conditionDictionaryType, FieldInfo registryControlTableField,
@@ -268,13 +263,6 @@ namespace RE2Extended.Runtime
                 VoiceEvent voiceEvent;
                 if (!TryGetVoiceEvent(blockName, out kind, out voiceEvent)) return;
 
-                if (!firstComponentRemovalLogged)
-                {
-                    firstComponentRemovalLogged = true;
-                    api.Log("[RE2Extended] Voice Interface observed first component removal: " +
-                            blockName + " type=" + blockType + " kind=" + kind + ".");
-                }
-
                 IStructure structure = GetLocalStructure();
                 if (structure == null) return;
 
@@ -292,29 +280,7 @@ namespace RE2Extended.Runtime
 
                 int activeDevices = CountActiveDevices(structure, condition, voiceBlockId);
                 if (activeDevices <= 0)
-                {
-                    if (!noDeviceLogged)
-                    {
-                        noDeviceLogged = true;
-                        api.Log("[RE2Extended] Voice Interface: no active device on the local structure; no sound.");
-                    }
                     return;
-                }
-
-                if (!deviceFoundLogged)
-                {
-                    deviceFoundLogged = true;
-                    api.Log("[RE2Extended] Voice Interface active on local structure (count=" +
-                            activeDevices + ").");
-                }
-
-                if (!firstEventLogged)
-                {
-                    firstEventLogged = true;
-                    api.Log("[RE2Extended] Voice Interface first destruction event: block=" +
-                            blockName + " type=" + blockType + " event=" + voiceEvent.Id +
-                            " structure=" + structure.Id + ".");
-                }
 
                 // Verbal channel: the event contains its clips in sequence.
                 // Repeats are suppressed while this event is playing or queued.
@@ -427,15 +393,7 @@ namespace RE2Extended.Runtime
             if (application == null) return null;
             IPlayer localPlayer = application.LocalPlayer;
             if (localPlayer == null) return null;
-            IStructure structure = localPlayer.CurrentStructure;
-            if (structure == null) return null;
-            if (!noLocalStructureLogged)
-            {
-                noLocalStructureLogged = true;
-                api.Log("[RE2Extended] Voice Interface local structure: id=" + structure.Id +
-                        " ready=" + structure.IsReady + " powered=" + structure.IsPowered + ".");
-            }
-            return structure;
+            return localPlayer.CurrentStructure;
         }
 
         private object GetConditionDictionary(IStructure structure)

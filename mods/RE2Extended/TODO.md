@@ -37,6 +37,35 @@ TODO:
 - Verify in-game that the single-child groups appear as direct inventory entries
   rather than requiring a variant-selection step.
 
+## Block-map upgrades
+
+Status: the runtime merges block fragments immediately before
+`DirectoryConverter.CopyXmlFile` calls the game's named-block ID assignment.
+Live logs confirm the early hook fires, the client now receives the block
+fragments, and blueprint spawning with the new blocks works.
+
+Observed caveat: the existing dedicated save's `blocksmap.dat` was not rewritten
+after the playfield loaded. The in-memory mapping works, but the file still has
+the pre-mod 1517 entries.
+
+The runtime now also hooks the named-ID allocator by signature in both
+PlayfieldServer and Client and pre-seeds RE2Extended names from `4095`
+downward. This makes the IDs independent of RE2 growth and map persistence,
+provided all processes have the same mod/scenario versions.
+
+TODO:
+
+- Verify client and server logs report the same high IDs for all injected blocks.
+- Verify blueprint spawning and placed-build loading with high IDs.
+- Simulate an RE2 update that adds a named block; confirm RE2Extended IDs do not
+  move.
+- Verify the "existing named block IDs kept" path when a map already contains
+  RE2Extended names.
+- Decide whether to keep `blocksmap.dat` unmodified or add a diagnostic-only
+  migration check.
+- Define the migration policy for worlds that already contain RE2Extended
+  blocks placed under the previous low-ID assignment.
+
 ## Other deferred work
 
 - Recompute `MarketPrice` values from the pinned RE2 `ItemsConfig.ecf` and

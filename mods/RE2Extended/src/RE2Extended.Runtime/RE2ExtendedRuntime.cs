@@ -13,6 +13,7 @@ namespace RE2Extended.Runtime
     {
         private const string ExpectedClientMvid = "462483cd-2f1f-4a24-9c83-46d24b1cb3f4";
         private const string ExpectedDediMvid = "fae3f936-680a-459b-99d0-6fe468a1f17f";
+        private const string ExpectedPlayfieldMvid = "757eb4a5-55a7-4665-adba-dd8cf37b5003";
 
         private IModApi api;
         private Harmony harmony;
@@ -38,7 +39,8 @@ namespace RE2Extended.Runtime
             string mvid = module.ModuleVersionId.ToString("D");
             bool knownClient = string.Equals(mvid, ExpectedClientMvid, StringComparison.OrdinalIgnoreCase);
             bool knownDedi = string.Equals(mvid, ExpectedDediMvid, StringComparison.OrdinalIgnoreCase);
-            if (!knownClient && !knownDedi)
+            bool knownPlayfield = string.Equals(mvid, ExpectedPlayfieldMvid, StringComparison.OrdinalIgnoreCase);
+            if (!knownClient && !knownDedi && !knownPlayfield)
                 api.Log("[RE2Extended] Warning: unknown Assembly-CSharp MVID " + mvid);
 
             ApplicationMode mode = api.Application == null ? ApplicationMode.Client : api.Application.Mode;
@@ -52,7 +54,7 @@ namespace RE2Extended.Runtime
             InstallLocalization(api);
             if (api.Application != null)
                 api.Application.OnPlayfieldLoaded += OnPlayfieldLoadedLocalization;
-            InstallConfigMerge(game, api);
+            InstallConfigMerge(game, api, mode);
 
             // Player ship speed is client-authoritative. Do not install this
             // patch in the dedicated master or playfield-server process.
@@ -338,7 +340,7 @@ namespace RE2Extended.Runtime
             }
         }
 
-        private void InstallConfigMerge(Assembly game, IModApi api)
+        private void InstallConfigMerge(Assembly game, IModApi api, ApplicationMode mode)
         {
             try
             {
@@ -372,21 +374,23 @@ namespace RE2Extended.Runtime
                     return;
                 }
 
-                bool installed = false;
+                bool configFileHook = false;
                 if (configFileType != null && configFileProperties != null)
-                    installed = TryInstallConfigFileHook(api, configFileType);
+                    configFileHook = TryInstallConfigFileHook(api, configFileType);
 
-                if (installed)
+                if (configFileHook)
                 {
                     api.Log("[RE2Extended] Config merge installed on ConfigFile.Load; " +
                             "fragments are merged once per named config load.");
-                    return;
                 }
 
+                // Collection hooks are installed even when ConfigFile.Load works.
+                // Some paths (notably multiplayer/shared-data and the block-map
+                // builder) read DynamicPropertiesCollection directly.
                 MethodInfo postfix = typeof(ConfigMergePatch)
                     .GetMethod(nameof(ConfigMergePatch.Postfix), BindingFlags.Static | BindingFlags.Public);
 
-                int patched = 0;
+                int collectionHooks = 0;
                 foreach (MethodInfo method in collectionType.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
                 {
                     if (method.Name != "ReadEcf" && method.Name != "LoadBinary" && method.Name != "Read")
@@ -395,8 +399,8 @@ namespace RE2Extended.Runtime
                     try
                     {
                         harmony.Patch(method, postfix: new HarmonyMethod(postfix));
-                        patched++;
-                        api.Log("[RE2Extended] Config merge fallback hook: " + method.Name +
+                        collectionHooks++;
+                        api.Log("[RE2Extended] Config merge collection hook: " + method.Name +
                                 "(" + string.Join(",", method.GetParameters().Select(p => p.ParameterType.Name).ToArray()) + ")");
                     }
                     catch (Exception error)
@@ -406,7 +410,20 @@ namespace RE2Extended.Runtime
                     }
                 }
 
-                api.Log("[RE2Extended] Config merge installed on " + patched + " fallback loader(s).");
+                if (collectionHooks == 0 && mode == ApplicationMode.DedicatedServer)
+                    api.Log("[RE2Extended] Config merge hooks unavailable in DedicatedServer; " +
+                            "block-map upgrade work runs in the PlayfieldServer.");
+                else if (collectionHooks == 0)
+                    api.Log("[RE2Extended] Config merge installed on 0 collection loader(s); " +
+                            "named block upgrades are not guaranteed.");
+                else
+                    api.Log("[RE2Extended] Config merge installed on " + collectionHooks + " collection loader(s).");
+
+                if (mode != ApplicationMode.DedicatedServer)
+                {
+                    TryInstallBlockMapHook(api, game, collectionType);
+                    TryInstallNamedIdAllocatorHook(api, game, collectionType);
+                }
             }
             catch (Exception error)
             {
@@ -441,6 +458,113 @@ namespace RE2Extended.Runtime
             catch (Exception error)
             {
                 api.Log("[RE2Extended] ConfigFile.Load hook failed; using collection fallback: " +
+                        error.GetType().Name + ": " + error.Message);
+                return false;
+            }
+        }
+
+        private bool TryInstallBlockMapHook(IModApi api, Assembly game, Type collectionType)
+        {
+            try
+            {
+                Type converterType = game.GetType("Assembly-CSharp.DirectoryConverter", false);
+                if (converterType == null)
+                {
+                    api.Log("[RE2Extended] Early block-map merge unavailable; DirectoryConverter not found.");
+                    return false;
+                }
+
+                MethodInfo target = converterType
+                    .GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
+                    .FirstOrDefault(m =>
+                        m.Name == "CopyXmlFile" &&
+                        m.ReturnType == typeof(bool) &&
+                        m.GetParameters().Length == 2 &&
+                        m.GetParameters()[0].ParameterType == collectionType &&
+                        m.GetParameters()[1].ParameterType == typeof(bool));
+
+                if (target == null)
+                {
+                    api.Log("[RE2Extended] Early block-map merge unavailable; " +
+                            "DirectoryConverter.CopyXmlFile(DynamicPropertiesCollection,bool) not found.");
+                    return false;
+                }
+
+                MethodInfo prefix = typeof(BlockMapMergePatch)
+                    .GetMethod(nameof(BlockMapMergePatch.Prefix), BindingFlags.Static | BindingFlags.Public);
+                harmony.Patch(target, prefix: new HarmonyMethod(prefix));
+
+                api.Log("[RE2Extended] Early block-map merge installed before named block ID assignment: " +
+                        target.DeclaringType.FullName + "." + target.Name + "(DynamicPropertiesCollection,bool).");
+                return true;
+            }
+            catch (Exception error)
+            {
+                api.Log("[RE2Extended] Early block-map merge unavailable: " +
+                        error.GetType().Name + ": " + error.Message);
+                return false;
+            }
+        }
+
+        private bool TryInstallNamedIdAllocatorHook(IModApi api, Assembly game, Type collectionType)
+        {
+            try
+            {
+                MethodInfo allocator = null;
+                Type mapType = null;
+
+                foreach (Type type in game.GetTypes())
+                {
+                    foreach (MethodInfo method in type.GetMethods(
+                        BindingFlags.Instance | BindingFlags.Static |
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+                    {
+                        if (method.ReturnType != typeof(void)) continue;
+                        ParameterInfo[] parameters = method.GetParameters();
+                        if (parameters.Length != 3) continue;
+                        if (parameters[0].ParameterType != typeof(int)) continue;
+                        if (parameters[1].ParameterType != typeof(int)) continue;
+                        if (parameters[2].ParameterType != collectionType) continue;
+
+                        if (allocator != null && allocator.DeclaringType != type)
+                        {
+                            api.Log("[RE2Extended] High named-ID allocator ambiguous: " +
+                                    allocator.DeclaringType.FullName + " and " + type.FullName +
+                                    "; high-ID allocation disabled.");
+                            return false;
+                        }
+
+                        allocator = method;
+                        mapType = type;
+                    }
+                }
+
+                if (allocator == null || mapType == null)
+                {
+                    api.Log("[RE2Extended] High named-ID allocator not found; " +
+                            "client/server ID parity is not guaranteed.");
+                    return false;
+                }
+
+                if (!ConfigMerger.ConfigureNamedIdAllocator(mapType))
+                {
+                    api.Log("[RE2Extended] High named-ID allocator shape incomplete in " +
+                            mapType.FullName + "; high-ID allocation disabled.");
+                    return false;
+                }
+
+                MethodInfo prefix = typeof(NamedIdAllocatorPatch)
+                    .GetMethod(nameof(NamedIdAllocatorPatch.Prefix), BindingFlags.Static | BindingFlags.Public);
+                harmony.Patch(allocator, prefix: new HarmonyMethod(prefix));
+
+                api.Log("[RE2Extended] High named-ID allocator installed: " +
+                        mapType.FullName + "." + allocator.Name +
+                        "(int,int,DynamicPropertiesCollection).");
+                return true;
+            }
+            catch (Exception error)
+            {
+                api.Log("[RE2Extended] High named-ID allocator unavailable: " +
                         error.GetType().Name + ": " + error.Message);
                 return false;
             }
@@ -607,11 +731,41 @@ namespace RE2Extended.Runtime
         {
             try
             {
-                ConfigMerger.TryMerge(__instance);
+                ConfigMerger.TryMerge(__instance, "collection-loader");
             }
             catch
             {
                 // Never let an optional config merge break a game config load.
+            }
+        }
+    }
+
+    public static class BlockMapMergePatch
+    {
+        public static void Prefix(object __0)
+        {
+            try
+            {
+                ConfigMerger.TryMerge(__0, "block-map-builder");
+            }
+            catch
+            {
+                // Never let an optional config merge break block-map construction.
+            }
+        }
+    }
+
+    public static class NamedIdAllocatorPatch
+    {
+        public static void Prefix(object __instance, int __0, int __1, object __2)
+        {
+            try
+            {
+                ConfigMerger.PrepareNamedIds(__instance, __0, __1, __2);
+            }
+            catch
+            {
+                // Never let optional ID allocation break the game's block map.
             }
         }
     }
@@ -698,9 +852,6 @@ namespace RE2Extended.Runtime
         private bool failureLogged;
         private bool detectionFailureLogged;
         private bool combatFailureLogged;
-        private bool firstApplyLogged;
-        private bool firstStructureLogged;
-        private readonly HashSet<string> loggedZeroDetection = new HashSet<string>(StringComparer.Ordinal);
         private readonly Dictionary<string, int> mappedBlockIds = new Dictionary<string, int>(StringComparer.Ordinal);
         private readonly Dictionary<string, int> mappedBlockIdTicks = new Dictionary<string, int>(StringComparer.Ordinal);
         private readonly HashSet<string> blockIdLookupLogged = new HashSet<string>(StringComparer.Ordinal);
@@ -885,37 +1036,12 @@ namespace RE2Extended.Runtime
 
             if (entityType != EntityTypeCv && entityType != EntityTypeSv) return;
 
-            if (!firstApplyLogged)
-            {
-                firstApplyLogged = true;
-                api.Log("[RE2Extended] SaveView postfix active; entityType=" + entityType + ".");
-            }
-
             IApplication application = api.Application;
             if (application == null) return;
             IPlayer player = application.LocalPlayer;
             if (player == null) return;
             IStructure structure = player.CurrentStructure;
             if (structure == null || !structure.IsReady || !structure.IsPowered) return;
-
-            if (!firstStructureLogged)
-            {
-                firstStructureLogged = true;
-                string driving = "unavailable";
-                try
-                {
-                    IEntity drivingEntity = player.DrivingEntity;
-                    if (drivingEntity != null)
-                        driving = DescribeEntity(drivingEntity);
-                }
-                catch (Exception error)
-                {
-                    driving = "error:" + error.GetType().Name;
-                }
-
-                api.Log("[RE2Extended] Structure context: current=" + DescribeStructure(structure) +
-                        " driving=" + driving + ".");
-            }
 
             if (structure.IsShieldActive) return;
             if (IsUnderAttack(structure)) return;
@@ -970,8 +1096,6 @@ namespace RE2Extended.Runtime
                 return cachedCount;
 
             int count = 0;
-            int positions = 0;
-            string source = "none";
             List<VectorInt3> list = new List<VectorInt3>();
             int mappedBlockId = ResolveBlockId(blockName);
 
@@ -995,7 +1119,6 @@ namespace RE2Extended.Runtime
                         {
                             object result = positionsOfTypeMethod.Invoke(deviceList, new object[] { mappedBlockId });
                             list = ConvertPositions(result);
-                            source = "ConditionDictionary." + DeviceBucketPatch.BucketName;
                         }
                     }
                 }
@@ -1018,7 +1141,6 @@ namespace RE2Extended.Runtime
                     if (registered != null && registered.Count > 0)
                     {
                         list = registered;
-                        source = "GetDevicePositions";
                     }
                 }
                 catch (Exception error)
@@ -1045,7 +1167,6 @@ namespace RE2Extended.Runtime
                             VectorInt3 pos = signal.BlockPos.Value;
                             if (!list.Contains(pos)) list.Add(pos);
                         }
-                        if (list.Count > 0) source = "GetBlockSignals";
                     }
                 }
                 catch (Exception error)
@@ -1059,7 +1180,6 @@ namespace RE2Extended.Runtime
                 }
             }
 
-            positions = list.Count;
             try
             {
                 foreach (VectorInt3 pos in list)
@@ -1094,26 +1214,6 @@ namespace RE2Extended.Runtime
             cachedAtTicks = now;
             cachedCount = count;
 
-            if (positions != 0 || count != 0)
-            {
-                api.Log("[RE2Extended] Amplifier count: structure=" + structure.Id +
-                        " block=" + blockName +
-                        " blockId=" + mappedBlockId +
-                        " source=" + source +
-                        " positions=" + positions +
-                        " active=" + count + ".");
-            }
-            else
-            {
-                string key = structure.Id + "|" + blockName;
-                if (loggedZeroDetection.Add(key))
-                {
-                    api.Log("[RE2Extended] No amplifier positions from device aggregate: structure=" +
-                            DescribeStructure(structure) + " block=" + blockName +
-                            " blockId=" + mappedBlockId +
-                            " aggregateContract=" + conditionContractAvailable);
-                }
-            }
             return count;
         }
 
@@ -1177,36 +1277,6 @@ namespace RE2Extended.Runtime
             if (blockIdLookupLogged.Add(blockName))
                 api.Log("[RE2Extended] No runtime block ID mapping for " + blockName + ".");
             return -1;
-        }
-
-        private static string DescribeStructure(IStructure structure)
-        {
-            if (structure == null) return "null";
-
-            string id = "id=" + structure.Id;
-            try
-            {
-                IEntity entity = structure.Entity;
-                if (entity == null) return id + " entity=null";
-                return id + " entityId=" + entity.Id + " name='" + entity.Name + "' type=" + entity.Type;
-            }
-            catch (Exception error)
-            {
-                return id + " entity=error:" + error.GetType().Name;
-            }
-        }
-
-        private static string DescribeEntity(IEntity entity)
-        {
-            if (entity == null) return "null";
-            try
-            {
-                return "entityId=" + entity.Id + " name='" + entity.Name + "' type=" + entity.Type;
-            }
-            catch (Exception error)
-            {
-                return "entity=error:" + error.GetType().Name;
-            }
         }
 
         private bool IsUnderAttack(IStructure structure)
@@ -1309,8 +1379,20 @@ namespace RE2Extended.Runtime
         private static IModApi api;
         private static string[] blockFragments = new string[0];
         private static string[] templateFragments = new string[0];
+        private const int FirstNamedBlockId = 2048;
+        private const int LastNamedBlockId = 4095;
+
         private static bool failureLogged;
+        private static bool blockMapMergeLogged;
+        private static bool blockMapMergeInjectedLogged;
+        private static bool namedIdLogged;
+        private static bool namedIdFailureLogged;
+        private static readonly object mergeLock = new object();
         private static readonly HashSet<string> injectedNames = new HashSet<string>(StringComparer.Ordinal);
+        private static string[] blockNames = new string[0];
+        private static FieldInfo namedNameToIdField;
+        private static FieldInfo namedIdToNameField;
+        private static MethodInfo namedAssignMethod;
 
         internal static bool Configure(Type type, Type fileType, PropertyInfo fileProperties,
             IModApi modApi, string blocksFolder, string templatesFolder)
@@ -1319,9 +1401,15 @@ namespace RE2Extended.Runtime
             configFileType = fileType;
             configFileProperties = fileProperties;
             api = modApi;
-            blockFragments = Directory.Exists(blocksFolder) ? Directory.GetFiles(blocksFolder, "*.ecf") : new string[0];
+            blockFragments = Directory.Exists(blocksFolder)
+                ? Directory.GetFiles(blocksFolder, "*.ecf")
+                    .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
+                    .ToArray()
+                : new string[0];
             templateFragments = templatesFolder != null && Directory.Exists(templatesFolder)
                 ? Directory.GetFiles(templatesFolder, "*.ecf")
+                    .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
+                    .ToArray()
                 : new string[0];
 
             elementType = collectionType.GetNestedType("Element", BindingFlags.Public | BindingFlags.NonPublic);
@@ -1344,7 +1432,153 @@ namespace RE2Extended.Runtime
                 Type.EmptyTypes,
                 null);
 
-            return elementType != null && elementsField != null && nameField != null && readEcfMethod != null;
+            if (elementType == null || elementsField == null || nameField == null || readEcfMethod == null)
+                return false;
+
+            blockNames = CollectBlockNames();
+            return true;
+        }
+
+        private static string[] CollectBlockNames()
+        {
+            List<string> names = new List<string>();
+            HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (string fragmentPath in blockFragments)
+            {
+                try
+                {
+                    object fragment = Activator.CreateInstance(collectionType);
+                    bool read = (bool)readEcfMethod.Invoke(fragment, new object[] { fragmentPath, "Block" });
+                    if (!read) continue;
+
+                    IList elements = elementsField.GetValue(fragment) as IList;
+                    if (elements == null) continue;
+
+                    foreach (object element in elements)
+                    {
+                        string name = nameField.GetValue(element) as string;
+                        if (!string.IsNullOrEmpty(name) && seen.Add(name))
+                            names.Add(name);
+                    }
+                }
+                catch (Exception error)
+                {
+                    LogOnce("block-name collection failed for " +
+                            Path.GetFileName(fragmentPath) + ": " + error.GetType().Name +
+                            ": " + error.Message);
+                }
+            }
+
+            return names.ToArray();
+        }
+
+        internal static bool ConfigureNamedIdAllocator(Type mapType)
+        {
+            namedNameToIdField = mapType
+                .GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                .FirstOrDefault(f => f.FieldType == typeof(Dictionary<string, int>));
+            namedIdToNameField = mapType
+                .GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                .FirstOrDefault(f => f.FieldType == typeof(Dictionary<int, string>));
+            namedAssignMethod = mapType
+                .GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                .FirstOrDefault(m =>
+                    m.ReturnType == typeof(void) &&
+                    m.GetParameters().Length == 3 &&
+                    m.GetParameters()[0].ParameterType == typeof(int) &&
+                    m.GetParameters()[1].ParameterType == typeof(string) &&
+                    m.GetParameters()[2].ParameterType == typeof(bool));
+
+            return namedNameToIdField != null &&
+                   namedIdToNameField != null &&
+                   namedAssignMethod != null &&
+                   blockNames.Length > 0;
+        }
+
+        internal static void PrepareNamedIds(object map, int start, int end, object collection)
+        {
+            if (start != FirstNamedBlockId || end < LastNamedBlockId)
+                return;
+            if (map == null || collection == null || namedNameToIdField == null ||
+                namedIdToNameField == null || namedAssignMethod == null)
+                return;
+            if (!collectionType.IsInstanceOfType(collection))
+                return;
+
+            lock (mergeLock)
+            {
+                TryMerge(collection, "block-map-builder");
+
+                try
+                {
+                    IDictionary nameToId = namedNameToIdField.GetValue(map) as IDictionary;
+                    IDictionary idToName = namedIdToNameField.GetValue(map) as IDictionary;
+                    if (nameToId == null || idToName == null) return;
+
+                    HashSet<int> used = new HashSet<int>();
+                    foreach (object key in idToName.Keys)
+                    {
+                        if (key is int) used.Add((int)key);
+                    }
+
+                    int nextId = LastNamedBlockId;
+                    List<string> assigned = new List<string>();
+                    List<string> kept = new List<string>();
+
+                    foreach (string name in blockNames)
+                    {
+                        if (string.IsNullOrEmpty(name)) continue;
+
+                        if (nameToId.Contains(name))
+                        {
+                            object existing = nameToId[name];
+                            if (existing is int && (int)existing > 0)
+                                kept.Add(name + "=" + existing);
+                            continue;
+                        }
+
+                        while (nextId >= FirstNamedBlockId && used.Contains(nextId))
+                            nextId--;
+
+                        if (nextId < FirstNamedBlockId)
+                        {
+                            if (!namedIdFailureLogged)
+                            {
+                                namedIdFailureLogged = true;
+                                api.Log("[RE2Extended] High named-ID space exhausted at " +
+                                        name + "; block IDs are not stable.");
+                            }
+                            return;
+                        }
+
+                        namedAssignMethod.Invoke(map, new object[] { nextId, name, true });
+                        used.Add(nextId);
+                        assigned.Add(name + "=" + nextId);
+                        nextId--;
+                    }
+
+                    if (!namedIdLogged && (assigned.Count > 0 || kept.Count > 0))
+                    {
+                        namedIdLogged = true;
+                        if (assigned.Count > 0)
+                            api.Log("[RE2Extended] High named block IDs assigned: " +
+                                    string.Join(", ", assigned.ToArray()) + ".");
+                        if (kept.Count > 0)
+                            api.Log("[RE2Extended] Existing named block IDs kept: " +
+                                    string.Join(", ", kept.ToArray()) + ".");
+                    }
+                }
+                catch (Exception error)
+                {
+                    if (!namedIdFailureLogged)
+                    {
+                        namedIdFailureLogged = true;
+                        api.Log("[RE2Extended] High named-ID allocation failed: " +
+                                error.GetType().Name + ": " + error.Message);
+                    }
+                }
+            }
         }
 
         internal static void TryMergeConfigFile(object configFile, bool loaded, string configName)
@@ -1371,32 +1605,66 @@ namespace RE2Extended.Runtime
 
         internal static void TryMerge(object collection)
         {
+            TryMerge(collection, null);
+        }
+
+        internal static void TryMerge(object collection, string source)
+        {
             if (collection == null || collectionType == null || !collectionType.IsInstanceOfType(collection))
                 return;
 
-            try
+            lock (mergeLock)
             {
-                IList elements = elementsField.GetValue(collection) as IList;
-                if (elements == null) return;
+                try
+                {
+                    IList elements = elementsField.GetValue(collection) as IList;
+                    if (elements == null) return;
 
-                bool isBlocks = ContainsName(elements, "CapacitorMS") && ContainsName(elements, "Air");
-                bool isTemplates = ContainsName(elements, "WarpDriveSV") &&
-                                   ContainsName(elements, "ThrusterSVSmallT2");
+                    bool isBlocks = ContainsName(elements, "CapacitorMS") && ContainsName(elements, "Air");
+                    bool isTemplates = ContainsName(elements, "WarpDriveSV") &&
+                                       ContainsName(elements, "ThrusterSVSmallT2");
 
-                if (isBlocks)
-                    Merge(collection, elements, blockFragments, "Block");
-                else if (isTemplates)
-                    Merge(collection, elements, templateFragments, "Template");
-            }
-            catch (Exception error)
-            {
-                LogOnce("merge failed: " + error.GetType().Name + ": " + error.Message);
+                    if (isBlocks)
+                    {
+                        int added = Merge(collection, elements, blockFragments, "Block");
+                        LogBlockMapMerge(source, added);
+                    }
+                    else if (isTemplates)
+                    {
+                        Merge(collection, elements, templateFragments, "Template");
+                    }
+                }
+                catch (Exception error)
+                {
+                    LogOnce("merge failed: " + error.GetType().Name + ": " + error.Message);
+                }
             }
         }
 
-        private static void Merge(object collection, IList elements, string[] fragments, string elementTag)
+        private static void LogBlockMapMerge(string source, int added)
         {
-            if (fragments == null || fragments.Length == 0) return;
+            if (!string.Equals(source, "block-map-builder", StringComparison.Ordinal))
+                return;
+
+            if (!blockMapMergeLogged)
+            {
+                blockMapMergeLogged = true;
+                api.Log("[RE2Extended] Early block-map merge reached before named block ID assignment.");
+            }
+
+            if (blockMapMergeInjectedLogged)
+                return;
+
+            blockMapMergeInjectedLogged = true;
+            if (added == 0)
+                api.Log("[RE2Extended] Early block-map merge: all block fragments already present.");
+            else
+                api.Log("[RE2Extended] Early block-map merge injected " + added + " block(s).");
+        }
+
+        private static int Merge(object collection, IList elements, string[] fragments, string elementTag)
+        {
+            if (fragments == null || fragments.Length == 0) return 0;
 
             int added = 0;
             foreach (string fragmentPath in fragments)
@@ -1445,7 +1713,7 @@ namespace RE2Extended.Runtime
                 }
             }
 
-            if (added == 0) return;
+            if (added == 0) return 0;
 
             if (applyReferencesMethod != null)
             {
@@ -1455,6 +1723,8 @@ namespace RE2Extended.Runtime
                     LogOnce("ApplyAllReferences failed: " + error.InnerException);
                 }
             }
+
+            return added;
         }
 
         private static bool ContainsName(IList elements, string name)
