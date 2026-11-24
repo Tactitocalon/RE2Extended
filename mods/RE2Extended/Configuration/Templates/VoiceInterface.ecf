@@ -1,0 +1,15 @@
+# RE2Extended - Voice Interface recipe
+#
+# Provisional low-tier electronics recipe for the PoC. MarketPrice above is a
+# placeholder; recompute from the final recipe if this becomes a production block.
+
+{ +Template Name: VoiceInterface
+  CraftTime: 5
+  Target: "SmallC,AdvC"
+  { Child Inputs
+    TitanPlates: 2
+    Electronics: 5
+    Computer: 2
+    Graphite: 1
+  }
+}

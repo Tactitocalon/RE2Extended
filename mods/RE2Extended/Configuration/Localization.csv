@@ -1,4 +1,7 @@
 Key,English
+VoiceInterface,Voice Interface
+VoiceInterfaceBlocks,Voice Interface
+bkiVoiceInterface,"A shipboard voice-alert module. While active and powered, it plays audible alerts when components on the vessel are destroyed. For the proof of concept, it reports destroyed thrusters with a Critical Hit warning."
 CruiseAmplifier,Cruise Amplifier
 CruiseAmplifierCV,Cruise Amplifier
 CruiseAmplifierSV,Cruise Amplifier

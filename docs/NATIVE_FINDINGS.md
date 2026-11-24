@@ -316,6 +316,118 @@ RE2Extended now ships `Configuration/Localization.csv` and merges it through
 
 ---
 
+## Voice Interface PoC: thruster destruction audio (build 5232)
+
+Status: **statically implemented and built; runtime verification pending.**
+
+Goal: when a thruster is removed on the local player's structure and an active
+`VoiceInterface` block is present, play the local Critical Hit WAV.
+
+### Detection candidate
+
+The PoC uses the device aggregate rather than a whole-structure scan. It installs
+a Harmony prefix on:
+
+```text
+BlockPosValueList.Remove(Vector3i)      token 0x06004D0F
+BlockPosValueList                       type  0x020009AD
+BlockPosValueList.GetBlockPosValue(...) token 0x06004D17
+ConditionDictionary.OpenImage(string)   token 0x0600501E
+```
+
+Before the removal, `GetBlockPosValue` supplies the old `RegistryToken`.
+`ControlTable.get_JoinDrive()` gives the old block type, which is mapped to a
+block name through `IApplication.GetBlockAndItemMapping()`. A name containing
+`Thruster` is the PoC trigger.
+
+The hook is limited to the local player's structure by collecting the
+`BlockPosValueList` instances reachable from that structure's
+`ConditionDictionary.CopyComponent()` bucket names and requiring the removing
+list instance to match one of them.
+
+### Gating
+
+- known client assembly and client/single-player mode;
+- local player and current structure present;
+- structure ready and powered;
+- at least one active `VoiceInterface` in the `RE2Extended` device bucket;
+- removed old block type maps to a `Thruster` block.
+
+### Audio
+
+The PoC does not use `ISoundPlayer` for the custom clip. `ISoundPlayer` resolves
+clip names through the game's `Sounds/` resource registry, which does not include
+a WAV shipped only in the mod folder. Instead the runtime uses:
+
+```text
+RE2Extended/Audio/voice_critical_hit.wav
+RE2Extended/Audio/voice_jet_engine_destroyed.wav
+RE2Extended/Audio/voice_turret_unit_destroyed.wav
+RE2Extended/Audio/voice_weapon_destroyed.wav
+RE2Extended/Audio/voice_power_unit_destroyed.wav
+RE2Extended/Audio/alarm_critical_damage.wav
+  -> minimal PCM WAV loader (per-path cache)
+  -> AudioClip.Create + SetData
+  -> verbal channel: VoiceEvent queue (max 4 events) + private 2D AudioSource
+  -> alarm channel: immediate playback, one AudioSource per alarm id
+```
+
+A `VoiceEvent` has an event ID and an ordered list of sounds. The current
+events are:
+
+| Trigger | Event ID | Sequence |
+| --- | --- | --- |
+| Thruster block removed | `thruster_destroyed` | Critical Hit, Jet Engine Destroyed |
+| Turret/SentryGun block removed | `turret_unit_destroyed` | Critical Hit, Turret Unit Destroyed |
+| Fixed weapon block removed | `weapon_destroyed` | Critical Hit, Weapon Destroyed |
+| Power generator block removed | `power_unit_destroyed` | Critical Hit, Power Unit Destroyed |
+
+Classification is name-based for the PoC. Turret matching excludes `TurretRadar`
+and `TurretAlarm`; weapon matching excludes weapon lockers/racks; generator
+matching excludes shield, gravity, oxygen, water, and control-field generators.
+An event is rejected if the same event ID is already pending or currently
+playing. Accepted events play their sounds in sequence. The alarm channel has no
+queue; the Critical Damage alarm plays immediately unless already playing.
+
+`build.ps1` copies the requested third-party WAVs from
+`third-party/SoundWork/final/` into the ignored staged package. No third-party
+audio is committed to source history.
+
+### Known PoC limitations
+
+- `BlockPosValueList.Remove` has not yet been runtime-verified for actual
+  thruster destruction.
+- Manual pickup/deconstruction may also remove the aggregate entry and therefore
+  may also play the clip. This is accepted for the naive PoC until the probe
+  distinguishes damage from deconstruction.
+- `BlockPosValueList.Add` calls `Remove` internally for duplicate positions, so a
+  placement/replacement edge case may produce a false trigger.
+- A small per-frame queue pump checks whether the current clip has finished;
+  there is no block/world polling. VoiceEvent repeat detection and same-alarm
+  repeat suppression are implemented; general event cooldowns are not.
+- No dedicated-server behavior is installed; audio is client-local only.
+
+### Files
+
+```text
+mods/RE2Extended/Configuration/Blocks/VoiceInterface.ecf
+mods/RE2Extended/Configuration/Templates/VoiceInterface.ecf
+mods/RE2Extended/src/RE2Extended.Runtime/VoiceInterfaceFeature.cs
+mods/RE2Extended/src/RE2Extended.Runtime/VoiceAudio.cs
+mods/RE2Extended/docs/VOICE_INTERFACE_PLAN.md
+```
+
+### Runtime verification still needed
+
+- Does the `Remove` hook fire when a thruster is destroyed by damage?
+- Does the old block type/name resolve to a `Thruster`?
+- Does the local-structure bucket-instance mapping succeed?
+- Does playback of the staged 8-bit mono WAV work?
+- Does manual pickup/deconstruction also trigger, as expected from the naive
+  design?
+
+---
+
 ## Reforged Eden 2 reference data (build 5232)
 
 Status: **located and hashed; static reference verified.**
@@ -606,6 +718,38 @@ Server-side API has entity position/movement methods such as `IEntity.Position`,
 
 ---
 
+### Mod network capability (build 5232, static)
+
+Status: **static implementation inspection; runtime delivery not yet probed.**
+
+The public `INetwork` API exposes client, playfield-server and dedicated packet
+senders/receivers. Inspected build-5232 implementations show:
+
+| Process | `SendToDedicatedServer` | `SendToPlayfieldServer` | `SendToPlayer` |
+| --- | --- | --- | --- |
+| Client `Eleon.ModBridge.NetworkBridge` | implemented | returns `false` | returns `false` |
+| Dedicated `Eleon.ModBridge.NetworkBridge` | returns `false` | implemented | returns `false` |
+
+So the public mod-packet route appears to be `Client -> Dedicated` and
+`Dedicated -> PlayfieldServer`; there is no verified public server-to-client
+route on this build. `RegisterReceiverForClientPackets` exists, but the inspected
+`SendToPlayer` methods return `false` in both assemblies.
+
+`NetworkBridge` derives the receiver key from
+`Assembly.GetCallingAssembly()`. A runtime assembly that sends and registers from
+the same DLL should use the same assembly-derived name; the `_Info.yaml` mod name
+should not be assumed without a probe.
+
+This affects multiplayer voice design. See
+`mods/RE2Extended/docs/MULTIPLAYER_VOICE_PLAN.md`. Runtime probes must confirm:
+
+- whether PfServer/PfClient behaves differently from the inspected static code;
+- whether `SendToPlayer` returns `true` and reaches a client receiver;
+- whether client block-aggregate removal events are reliable for the local
+  ship and for passengers, which would avoid server-to-client packets entirely.
+
+---
+
 ## Evidence log
 
 | Date/context | Target | Method | Result |
@@ -623,3 +767,4 @@ Server-side API has entity position/movement methods such as `IEntity.Position`,
 | Device visibility/detection | client | runtime log + config | `IsAccessible: true` makes a class-less device appear in the block/control-panel list. Class-less blocks still do not appear in `GetDevicePositions`; fixed-ID scan fallback added. Speed must use the proven `Disk.SaveView()` postfix, not `PublishProject()`. |
 | Class-less device prototype | client | runtime log | `PublishProject` postfix was active, but a class-less Cruise Amplifier did not appear in the ship device list and `GetDevicePositions` returned no positions. Follow-up: `IsAccessible: true` is the control-panel/block-list visibility property; class-less blocks still need a fixed-ID scan fallback. Speed must use `SaveView()`, not `PublishProject()`. |
 | Block-ID / device stats | workshop + client | config and decompile inspection | Block ID space is `0..4095`: terrain `0..255`, fixed `256..2047`, named `2048..4095`. RE2 uses 1896 fixed IDs with no conflicts for 1521/1522, and 1517 named blocks mapping to 2048..3563. Teleporter class is `Teleporter`. `MarketPrice` is explicit (RE2 normally recipe material value); medium fuel tanks provide the requested blast/radiation values. |
+| Multiplayer network capability | client + dedi | `NetworkBridge` inspection | Client can send to dedicated; dedicated can send to playfield server; `SendToPlayer` returns `false` in both inspected assemblies. Server-to-client mod packet delivery is unverified and likely unavailable through the public API on build 5232. |

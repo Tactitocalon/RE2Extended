@@ -1,0 +1,71 @@
+# RE2Extended - Voice Interface
+#
+# Proof-of-concept signal device. Uses the LCDProjector model and the
+# LCDNoFrame1x1/LCDProjector device properties. No native Class: is assigned;
+# detection uses the RE2Extended ConditionDictionary bucket.
+#
+# The PoC plays a Critical Hit clip when a Thruster is destroyed on the local
+# player's structure while this device is active.
+
+{ +Block Name: VoiceInterface
+  Material: Device
+  Shape: ModelEntity
+  ShowBlockName: true
+  TemplateRoot: VoiceInterfaceBlocks
+  Model: @models/Blocks/Misc/LCDProjectorPrefab
+  Collide: "bullet,rocket"
+  DropMeshfile: Entities/Misc/DropContainerNewPrefab
+  Place: Free
+  RemoveOnSI: true
+  StabilitySupport: false
+  IsAccessible: true, type: bool
+  IsActivateable: true
+  IsActivateableInCP: true
+  IsActivatedOnPlace: true
+  IsLockable: true
+  IsDuplicateable: false
+  AllowedInBlueprint: true
+  IsOxygenTight: false, display: true
+  AllowPlacingAt: "MS,SS", display: true
+  SizeInBlocks: "1,1,1", display: true
+  StackSize: 1000
+  BlockColor: "110,110,110"
+  Category: Devices
+  Group: cpgSignal
+  IndexName: RE2Extended
+  Info: bkiVoiceInterface, display: true
+  CustomIcon: LCDNoFrame1x1
+  Mass: 50, type: float, display: true, formatter: Kilogram
+  Volume: 10, type: float, display: true, formatter: Liter
+  HitPoints: 250, type: int, display: true
+  EnergyIn: 1, type: int, display: true, formatter: Watt
+  CPUIn: 0, type: int, display: true
+  MarketPrice: 1000, display: true
+  ShowUser: Yes
+}
+
+# Inventory/build-menu group, following the vanilla thruster/LCD pattern.
+{ +Block Name: VoiceInterfaceBlocks
+  IndexName: RE2Extended
+  Group: cpgSignal
+  Material: Device
+  Shape: Invisible
+  Place: Free
+  DropMeshfile: Entities/Misc/DropContainerNewPrefab
+  StackSize: 1000
+  Category: Devices
+  CustomIcon: LCDNoFrame1x1
+  ChildBlocks: "VoiceInterface"
+  AllowPlacingAt: "MS,SS", display: true
+  SizeInBlocks: "1,1,1", display: true
+  BlockColor: "110,110,110"
+  Info: bkiVoiceInterface, display: true
+  IsOxygenTight: false, display: true
+  Mass: 50, type: float, display: true, formatter: Kilogram
+  Volume: 10, type: float, display: true, formatter: Liter
+  HitPoints: 250, type: int, display: true
+  EnergyIn: 1, type: int, display: true, formatter: Watt
+  CPUIn: 0, type: int, display: true
+  MarketPrice: 1000, display: true
+  ShowUser: Yes
+}

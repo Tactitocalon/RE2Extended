@@ -18,6 +18,7 @@ namespace RE2Extended.Runtime
         private Harmony harmony;
         private MethodInfo speedTarget;
         private CruiseSpeedContext speedContext;
+        private VoiceInterfaceFeature voiceInterface;
         private bool disposed;
         private bool localizationCsvLogged;
         private bool localizationCsvErrorLogged;
@@ -45,6 +46,7 @@ namespace RE2Extended.Runtime
 
             harmony = new Harmony("RE2Extended.runtime");
             DeviceBucketPatch.Configure(game, api, harmony);
+            voiceInterface = VoiceInterfaceFeature.TryInstall(game, api, harmony, mode, knownClient);
             InstallIconAliasPatch(api);
 
             InstallLocalization(api);
@@ -460,6 +462,19 @@ namespace RE2Extended.Runtime
 
             try
             {
+                if (voiceInterface != null)
+                {
+                    voiceInterface.Dispose();
+                    voiceInterface = null;
+                }
+            }
+            catch
+            {
+                // Shutdown must not throw into the game.
+            }
+
+            try
+            {
                 if (api != null && api.Application != null)
                     api.Application.OnPlayfieldLoaded -= OnPlayfieldLoadedLocalization;
             }
@@ -609,7 +624,9 @@ namespace RE2Extended.Runtime
                 { "CruiseAmplifierCV", "CapacitorMS" },
                 { "CruiseAmplifierSV", "CapacitorMS" },
                 { "CruiseAmplifierCVBlocks", "CapacitorMS" },
-                { "CruiseAmplifierSVBlocks", "CapacitorMS" }
+                { "CruiseAmplifierSVBlocks", "CapacitorMS" },
+                { "VoiceInterface", "LCDNoFrame1x1" },
+                { "VoiceInterfaceBlocks", "LCDNoFrame1x1" }
             };
 
         public static void Prefix(ref string value)

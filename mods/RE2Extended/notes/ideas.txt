@@ -153,6 +153,30 @@ Sensor Augments
  - ability to identify stuff faster?
 
 
+BITCHIN BETTY (Voice Interface)
+ - "Voice Interface" block that plays sound effects as things on the ship get destroyed
+ - signal device, can be turned on or off. off = no sound
+ - two channels: verbal alerts, and alarm sounds
+ - verbal alerts: go into a queue (with a maximum queue size)
+ - alarm sounds: play instantaneously when an event occurs. if a specific sound is playing when that same event occurs again, the event is ignored.
+
+Verbal Alerts:
+ - "Critical Hit" - ! when any component is destroyed - plays before the specific message, if there is any.
+ - "Turret Destroyed" - ! when a turret is destroyed. can splice "Enemy Turret Unit Destroyed"
+ - "Weapon Destroyed" - ! when a fixed weapon is destroyed.
+ - "Internal Explosion Detected" - ! when a generator, fuel tank or warp drive is destroyed. splice from "Internal Ammo Explosion Detected"
+ - "Jet Engine Destroyed" - ! when a thruster is destroyed. splice from JumpJet, Engine and Destroyed. Use for thruster
+ - "Sensors Destroyed" - when radar is destroyed.
+ - "Power Unit Destroyed" - ! splice from P.O. Destroy Power Converter
+ - "Ammo Destroyed" - when an ammo controller is destroyed
+ - "Atmosphere Breach Detected" - if an oxygenated zone is no longer oxygenated
+
+Alert Sounds:
+ - "WARNING Critical Damage" - played whenever one of the above components are destroyed
+ - "WARNING Fuel" - played whenever you run out of pentaxid fuel
+ - "WARNING Heat Warning" - played when you run out of shield
+ -
+
 
 
 

@@ -5,6 +5,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $Root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '.'))
+$RepoRoot = [IO.Path]::GetFullPath((Join-Path $Root '..\..'))
 $RuntimeProject = Join-Path $Root 'src\RE2Extended.Runtime\RE2Extended.Runtime.csproj'
 $BuildOutput = Join-Path $Root 'artifacts\build'
 $Stage = Join-Path $Root 'package\RE2Extended'
@@ -38,6 +39,29 @@ Copy-Item (Join-Path $BuildOutput 'RE2Extended.Runtime.dll') $StageRuntime -Forc
 Copy-Item $HarmonyPatched (Join-Path $StageRuntime '0Harmony.dll') -Force
 Copy-Item (Join-Path $PSScriptRoot 'package\RE2Extended_Info.yaml') $Stage -Force
 Copy-Item (Join-Path $PSScriptRoot 'Configuration') $Stage -Recurse -Force
+
+# The Voice Interface PoC uses the requested local third-party WAV. It is copied
+# only into the ignored staged package, never into tracked source.
+$VoiceAudioStage = Join-Path $Stage 'Audio'
+$VoiceAudioFiles = @(
+    'voice_critical_hit.wav',
+    'voice_jet_engine_destroyed.wav',
+    'voice_turret_unit_destroyed.wav',
+    'voice_weapon_destroyed.wav',
+    'voice_power_unit_destroyed.wav',
+    'alarm_critical_damage.wav'
+)
+foreach ($VoiceAudioFile in $VoiceAudioFiles) {
+    $VoiceAudio = Join-Path $RepoRoot (Join-Path 'third-party\SoundWork\final' $VoiceAudioFile)
+    if (Test-Path $VoiceAudio) {
+        New-Item -ItemType Directory -Path $VoiceAudioStage -Force | Out-Null
+        Copy-Item $VoiceAudio (Join-Path $VoiceAudioStage $VoiceAudioFile) -Force
+        Write-Output "Staged Voice Interface audio: $VoiceAudio"
+    }
+    else {
+        Write-Warning "Voice Interface audio not found: $VoiceAudio"
+    }
+}
 
 $HarmonyLicense = Join-Path $env:USERPROFILE '.nuget\packages\lib.harmony\2.4.3\LICENSE'
 if (Test-Path $HarmonyLicense) {
