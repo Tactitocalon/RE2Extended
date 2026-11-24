@@ -564,16 +564,17 @@ BlocksConfig property notes.
 
 ### 5.4 Localization and icons
 
-Status: **partially implemented.** The mod injects English entries at runtime
-through `Localization.Set(string,string)` for:
+Status: **implemented.** English entries ship in
+`Configuration/Localization.csv` and are merged through the native CSV path. The
+runtime fallback sets the same entries through `Localization.Set(string,string)`:
 
-- placed/control-panel name: `CruiseAmplifier` → "Cruise Amplifier";
-- inventory/block name: `CruiseAmplifierCV` / `CruiseAmplifierSV` → "Cruise Amplifier";
+- `CruiseAmplifierCV` → "Cruise Amplifier (CV)";
+- `CruiseAmplifierSV` → "Cruise Amplifier (SV)";
 - descriptions: `bkiCruiseAmplifierCV` / `bkiCruiseAmplifierSV`.
 
-The placed and inventory names currently share the block `Name` key, so the
-requested inventory-only `(CV)` / `(SV)` suffix is still deferred. Non-English
-translations and full CSV merging are tracked in [`TODO.md`](../TODO.md).
+Each vessel type uses a single named block; there is no separate invisible
+inventory group. The suffix therefore appears both in the inventory/build menu
+and when placed. Non-English translations are tracked in [`TODO.md`](../TODO.md).
 
 The icon path `CustomIcon: CapacitorMS` still needs in-game verification. If the
 reused icon is invalid, the model thumbnail should be used until a proper icon is

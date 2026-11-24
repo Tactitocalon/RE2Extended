@@ -4,8 +4,6 @@ param(
     [string[]]$RequireName = @(
         'CruiseAmplifierCV',
         'CruiseAmplifierSV',
-        'CruiseAmplifierCVBlocks',
-        'CruiseAmplifierSVBlocks',
         'VoiceInterface',
         'VoiceInterfaceBlocks'
     )

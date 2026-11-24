@@ -88,10 +88,9 @@ existing save will receive new named IDs.
 
 Localization for the Cruise Amplifier ships as
 `Configuration/Localization.csv` and is merged through the game's native
-`Localization.LoadCSV(..., merge: true)` path. Inventory/build-menu names use
-invisible `CruiseAmplifierCVBlocks` / `CruiseAmplifierSVBlocks` groups, matching
-the vanilla thruster pattern: `Cruise Amplifier (CV)` / `(SV)` in inventory,
-`Cruise Amplifier` when placed. Non-English columns are tracked in
+`Localization.LoadCSV(..., merge: true)` path. The single CV and SV blocks use
+the names `Cruise Amplifier (CV)` / `Cruise Amplifier (SV)` in both the
+inventory/build menu and when placed. Non-English columns are tracked in
 [`TODO.md`](TODO.md).
 
 ## Planned / documented

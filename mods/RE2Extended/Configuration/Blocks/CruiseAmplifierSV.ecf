@@ -8,7 +8,6 @@
   Material: Device
   Shape: ModelEntity
   ShowBlockName: true
-  TemplateRoot: CruiseAmplifierSVBlocks
   Model: @models/Blocks/Spaceship/CapacitorPrefab
   Mesh-Damage-1: Mesh/D0
   Mesh-Damage-2: Mesh/D1
@@ -47,32 +46,6 @@
   BlastRadius: 4
   BlastDamage: 525
   Radiation: 2.75, display: RadiationLevel
-  ShowUser: Yes
-}
-
-# Inventory/build-menu group. See CruiseAmplifier.ecf for the pattern.
-{ +Block Name: CruiseAmplifierSVBlocks
-  IndexName: RE2Extended
-  Group: cpgTransportation
-  Material: Device
-  Shape: Invisible
-  Place: Free
-  DropMeshfile: Entities/Misc/DropContainerNewPrefab
-  StackSize: 1000
-  Category: Devices
-  CustomIcon: CapacitorMS
-  ChildBlocks: "CruiseAmplifierSV"
-  AllowPlacingAt: "SS", display: true
-  SizeInBlocks: "2,1,1", display: true
-  BlockColor: "110,110,110"
-  Info: bkiCruiseAmplifierSV, display: true
-  IsOxygenTight: false, display: true
-  Mass: 120, type: float, display: true, formatter: Kilogram
-  Volume: 31.3, type: float, display: true, formatter: Liter
-  HitPoints: 1750, type: int, display: true
-  EnergyIn: 200, type: int, display: true, formatter: Watt
-  CPUIn: 300, type: int, display: true
-  MarketPrice: 10629, display: true
   ShowUser: Yes
   UnlockCost: 11, display: true
   UnlockLevel: 10, display: true

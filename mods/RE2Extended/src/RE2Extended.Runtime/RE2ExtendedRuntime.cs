@@ -290,9 +290,8 @@ namespace RE2Extended.Runtime
 
         private static void InstallLocalizationFallback(MethodInfo set)
         {
-            SetLocalization(set, "CruiseAmplifier", "Cruise Amplifier");
-            SetLocalization(set, "CruiseAmplifierCV", "Cruise Amplifier");
-            SetLocalization(set, "CruiseAmplifierSV", "Cruise Amplifier");
+            SetLocalization(set, "CruiseAmplifierCV", "Cruise Amplifier (CV)");
+            SetLocalization(set, "CruiseAmplifierSV", "Cruise Amplifier (SV)");
 
             const string common =
                 "Cruise Amplifiers are standard aftermarket upgrades for commercial vessels for improving sublight travel times. " +
@@ -777,8 +776,6 @@ namespace RE2Extended.Runtime
             {
                 { "CruiseAmplifierCV", "CapacitorMS" },
                 { "CruiseAmplifierSV", "CapacitorMS" },
-                { "CruiseAmplifierCVBlocks", "CapacitorMS" },
-                { "CruiseAmplifierSVBlocks", "CapacitorMS" },
                 { "VoiceInterface", "LCDNoFrame1x1" },
                 { "VoiceInterfaceBlocks", "LCDNoFrame1x1" }
             };

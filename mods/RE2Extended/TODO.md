@@ -21,21 +21,17 @@ TODO:
 
 ## Display-name suffix
 
-Implemented without a UI patch. Vanilla thrusters use an invisible `*Blocks`
-group block with `ChildBlocks`; the placed child block points back with
-`TemplateRoot`. The group's localization key carries the ship-type suffix, while
-the child block's key is the short placed name.
+Implemented without a UI patch. The amplifiers use one named block per vessel
+type, with the ship-type suffix in the block localization key itself:
 
-The Cruise Amplifiers now follow the same pattern:
-
-- `CruiseAmplifierCVBlocks` / `CruiseAmplifierSVBlocks` are the inventory groups.
-- Their names are `Cruise Amplifier (CV)` / `Cruise Amplifier (SV)`.
-- `CruiseAmplifierCV` / `CruiseAmplifierSV` remain `Cruise Amplifier` when placed.
+- `CruiseAmplifierCV` is named `Cruise Amplifier (CV)`.
+- `CruiseAmplifierSV` is named `Cruise Amplifier (SV)`.
+- The suffix is shown both in the inventory/build menu and when placed.
 
 TODO:
 
-- Verify in-game that the single-child groups appear as direct inventory entries
-  rather than requiring a variant-selection step.
+- Verify the names in the inventory, build menu, control panel, tech tree, and
+  blueprint editor.
 
 ## Block-map upgrades
 
