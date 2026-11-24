@@ -1,15 +1,16 @@
-# RE2Extended - Voice Interface recipe
+# RE2Extended - Ship Alert System recipe
 #
-# Provisional low-tier electronics recipe for the PoC. MarketPrice above is a
-# placeholder; recompute from the final recipe if this becomes a production block.
+# 8 Electronics, 4 Steel Plates, 12 Carbon Substrate, 4 Computers, 10 Optical
+# Fiber. MarketPrice above is the recipe material value (1038).
 
 { +Template Name: VoiceInterface
   CraftTime: 5
   Target: "SmallC,AdvC"
   { Child Inputs
-    TitanPlates: 2
-    Electronics: 5
-    Computer: 2
-    Graphite: 1
+    Electronics: 8
+    SteelPlate: 4
+    PlasticMaterial: 12
+    Computer: 4
+    OpticalFiber: 10
   }
 }

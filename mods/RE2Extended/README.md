@@ -19,11 +19,11 @@ an active shield.
 The amplifier must be powered and active. Signals/control-panel switching use the
 same activateable behaviour as the RE2 decorative wall console.
 
-## Current feature: Voice Interface (PoC)
+## Current feature: Ship Alert System (internal `VoiceInterface`)
 
-Adds a switchable `VoiceInterface` signal device using the `LCDProjector` model.
-While the device is active on the local player's powered structure, destroying a
-recognized component triggers its VoiceEvent:
+Adds a switchable `VoiceInterface` signal device using the `TurretEnemyBlack`
+model, icon and collision. While the device is active on the local player's
+powered structure, destroying a recognized component triggers its VoiceEvent:
 
 | Component | VoiceEvent | Sounds |
 | --- | --- | --- |
@@ -35,13 +35,15 @@ recognized component triggers its VoiceEvent:
 Each event also triggers the Critical Damage alarm, which plays immediately
 unless that alarm is already playing. The voice queue holds at most 4 pending
 events. The same event is rejected while it is already queued or currently
-playing. The alarm channel has no queue. The PoC is intentionally naive and
-client-local; see [`docs/VOICE_INTERFACE_PLAN.md`](docs/VOICE_INTERFACE_PLAN.md).
+playing. The alarm channel has no queue. Additional alarms play once when the
+ship first loses all active shields or all Pentaxid tank content. The feature is
+intentionally naive and client-local; see
+[`docs/VOICE_INTERFACE_PLAN.md`](docs/VOICE_INTERFACE_PLAN.md).
 
-The staged package includes the five voice WAVs and
-`alarm_critical_damage.wav`, copied from the local third-party SoundWork folder
-by `build.ps1` into the ignored package. The WAVs are not committed to source
-history.
+The staged package includes the five voice WAVs, `alarm_critical_damage.wav`,
+`alarm_no_shield.wav`, and `alarm_no_fuel.wav`, copied from the local third-party
+SoundWork folder by `build.ps1` into the ignored package. The WAVs are not
+committed to source history.
 
 ## Install
 

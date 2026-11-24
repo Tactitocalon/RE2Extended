@@ -143,7 +143,8 @@ namespace RE2Extended.Runtime
                     prefix: new HarmonyMethod(typeof(IconAliasPatch).GetMethod(
                         nameof(IconAliasPatch.Prefix), BindingFlags.Static | BindingFlags.Public)));
 
-                api.Log("[RE2Extended] Icon aliases installed: Cruise Amplifier -> CapacitorMS.");
+                api.Log("[RE2Extended] Icon aliases installed: Cruise Amplifier -> CapacitorMS; " +
+                        "Ship Alert System -> TurretEnemyBlack.");
             }
             catch (Exception error)
             {
@@ -776,8 +777,8 @@ namespace RE2Extended.Runtime
             {
                 { "CruiseAmplifierCV", "CapacitorMS" },
                 { "CruiseAmplifierSV", "CapacitorMS" },
-                { "VoiceInterface", "LCDNoFrame1x1" },
-                { "VoiceInterfaceBlocks", "LCDNoFrame1x1" }
+                { "VoiceInterface", "TurretEnemyBlack" },
+                { "VoiceInterfaceBlocks", "TurretEnemyBlack" }
             };
 
         public static void Prefix(ref string value)

@@ -266,8 +266,10 @@ Icons are separate: inventory/build entries use `CustomIcon`, but the control
 panel path `BuilderContextConnectionToken.AllocateEmulator()` assigns
 `UISprite.spriteName = registryOptions.CloneOutline()` directly. For custom
 blocks that sprite name has no atlas entry. RE2Extended therefore sets
-`CustomIcon: CapacitorMS` and installs a narrow `UISprite.spriteName` setter
-prefix that aliases the four Cruise Amplifier block names to `CapacitorMS`.
+`CustomIcon: CapacitorMS` for the Cruise Amplifiers and
+`CustomIcon: TurretEnemyBlack` for the Ship Alert System, and installs a narrow
+`UISprite.spriteName` setter prefix that aliases those block and group names to
+the matching icon.
 
 ### Localization loading (build 5232, static)
 
@@ -366,6 +368,8 @@ RE2Extended/Audio/voice_turret_unit_destroyed.wav
 RE2Extended/Audio/voice_weapon_destroyed.wav
 RE2Extended/Audio/voice_power_unit_destroyed.wav
 RE2Extended/Audio/alarm_critical_damage.wav
+RE2Extended/Audio/alarm_no_shield.wav
+RE2Extended/Audio/alarm_no_fuel.wav
   -> minimal PCM WAV loader (per-path cache)
   -> AudioClip.Create + SetData
   -> verbal channel: VoiceEvent queue (max 4 events) + private 2D AudioSource
@@ -389,6 +393,39 @@ An event is rejected if the same event ID is already pending or currently
 playing. Accepted events play their sounds in sequence. The alarm channel has no
 queue; the Critical Damage alarm plays immediately unless already playing.
 
+The No Shield Alarm is separate from component destruction. One generic 333 ms
+structure-alert tick reads only the local player's current structure:
+
+```text
+IsShieldActive && ShieldLevel <= 0
+```
+
+`IsShieldActive` is the "has shields and switched on" gate because the native
+state only leaves `Off` when a shield generator is present and enabled. The
+alarm is edge-triggered: arm on a positive shield level, fire once at zero,
+then re-arm only after the level rises above zero again.
+
+The same tick checks Pentaxid fuel:
+
+```text
+IStructure.PentaxidTank   (null when the structure has no such tank)
+  -> IStructureTank.Content
+```
+
+On build 5232, `StructureBridge.PentaxidTank` returns an `ActivityService` whose
+`Content` aggregates the Pentaxid tank inventory. If no tank is present the
+fallback is `NetworkSetFunctionService.keywordsID`, a static field that is never
+assigned in the client assembly, so the tank is null and the check fails closed.
+The fuel alarm arms after observing a positive content value and fires once when
+the content reaches zero. It does not fire for a tank that is already empty on
+entry/load. `UsesIntegerAmounts` is true, so a small epsilon is sufficient for
+the float `Content` value.
+
+The active `VoiceInterface` bucket scan is performed only when an alarm is about
+to fire, so the steady-state poll is just a few structure property reads. No
+per-ship, per-device, or per-interface pollers are created, and only the local
+piloted structure is monitored.
+
 `build.ps1` copies the requested third-party WAVs from
 `third-party/SoundWork/final/` into the ignored staged package. No third-party
 audio is committed to source history.
@@ -402,9 +439,11 @@ audio is committed to source history.
   distinguishes damage from deconstruction.
 - `BlockPosValueList.Add` calls `Remove` internally for duplicate positions, so a
   placement/replacement edge case may produce a false trigger.
-- A small per-frame queue pump checks whether the current clip has finished;
-  there is no block/world polling. VoiceEvent repeat detection and same-alarm
-  repeat suppression are implemented; general event cooldowns are not.
+- A small per-frame queue pump checks whether the current clip has finished.
+  Shield state uses one 333 ms local-structure alert tick; the same tick checks
+  Pentaxid tank content. There is no block/world polling. VoiceEvent repeat
+  detection and same-alarm repeat suppression are implemented; general event
+  cooldowns are not.
 - No dedicated-server behavior is installed; audio is client-local only.
 
 ### Files
@@ -423,6 +462,16 @@ mods/RE2Extended/docs/VOICE_INTERFACE_PLAN.md
 - Does the old block type/name resolve to a `Thruster`?
 - Does the local-structure bucket-instance mapping succeed?
 - Does playback of the staged 8-bit mono WAV work?
+- Does the shield alert fire once on a positive-to-zero transition and stay
+  silent for shieldless ships, switched-off shields, and Voice Interface off or
+  unpowered?
+- Does `IsShieldActive` remain false for a ship without a shield generator?
+- Is `PentaxidTank` non-null on a ship with a tank and null on a ship without
+  one?
+- Does `PentaxidTank.Content` decrease during warp fuel consumption and reach
+  exactly zero when empty?
+- Does the fuel alert fire once on the positive-to-zero transition and stay
+  silent on entry/load at zero?
 - Does manual pickup/deconstruction also trigger, as expected from the naive
   design?
 
@@ -669,6 +718,14 @@ IStructure.IsShieldActive
 `CooldownFromRecharge=3`, `CooldownFromSwitchOn=4`, `ActiveRecharging=5`,
 `ActiveHitCooldown=6`. `DeleteOptions()` is `state > Off`, so it is true for
 every non-`Off` state, not only a fully charged shield.
+
+`IStructure.ShieldLevel` maps to `ConditionDictionary.currentLog` and is the
+current shield points value, not a percentage. `ConditionDictionary.EnableDatabase`
+consumes shield points from `currentLog`, clamps it to zero on depletion, and
+publishes `GameEventType.ShieldAttacked` when damage is absorbed. Use
+`IsShieldActive && ShieldLevel <= 0` for a depleted but enabled shield. Do not
+use `ConditionDictionary.TestForm()` for this: it also rejects the recharge and
+cooldown states that count as `IsShieldActive`.
 
 Client tokens:
 

@@ -49,7 +49,9 @@ $VoiceAudioFiles = @(
     'voice_turret_unit_destroyed.wav',
     'voice_weapon_destroyed.wav',
     'voice_power_unit_destroyed.wav',
-    'alarm_critical_damage.wav'
+    'alarm_critical_damage.wav',
+    'alarm_no_shield.wav',
+    'alarm_no_fuel.wav'
 )
 foreach ($VoiceAudioFile in $VoiceAudioFiles) {
     $VoiceAudio = Join-Path $RepoRoot (Join-Path 'third-party\SoundWork\final' $VoiceAudioFile)

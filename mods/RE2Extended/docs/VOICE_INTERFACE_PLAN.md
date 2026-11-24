@@ -14,9 +14,9 @@ PoC scope: add a new signal device, the **Voice Interface**, and play a
 - Implementation is deliberately naive: every observed removal on the local
   structure attempts to queue the matching VoiceEvent.
 - Model and block properties follow `LCDProjector` / `LCDNoFrame1x1`.
-- The requested third-party voice WAVs and `alarm_critical_damage.wav` are used.
-  `build.ps1` copies them from `third-party/SoundWork/final/` into the ignored
-  staged package only.
+- The requested third-party voice WAVs, `alarm_critical_damage.wav`,
+  `alarm_no_shield.wav`, and `alarm_no_fuel.wav` are used. `build.ps1` copies
+  them from `third-party/SoundWork/final/` into the ignored staged package only.
 - Each `VoiceEvent` contains Critical Hit followed by its specific alert:
   Jet Engine Destroyed, Turret Unit Destroyed, Weapon Destroyed, or Power Unit
   Destroyed.
@@ -26,6 +26,14 @@ PoC scope: add a new signal device, the **Voice Interface**, and play a
   alarm is skipped while it is already playing.
 - The Critical Damage Alarm currently accompanies every recognized component
   destruction event.
+- The No Shield Alarm plays once when the local player's current structure
+  transitions from active shields above zero to zero. It requires an active
+  `VoiceInterface`, a ready and powered structure, and `IsShieldActive`.
+- The No Fuel Alarm plays once when the structure's Pentaxid tank content
+  transitions from above zero to zero. It requires an active `VoiceInterface`
+  and a ready, powered local structure.
+- Structure alerts use one generic 333 ms local-structure poll. Future alerts
+  belong in the same tick; no per-ship or per-device pollers are created.
 - The detection hook is `BlockPosValueList.Remove(Vector3i)`; this still needs
   in-game confirmation.
 
@@ -94,37 +102,38 @@ mod's blocks.
 | --- | --- |
 | Internal name | `VoiceInterface` |
 | Inventory group | `VoiceInterfaceBlocks` (same `*Blocks` pattern as Cruise Amplifier) |
-| Display name | `Voice Interface`; inventory group `Voice Interface (CV)` / `(SV)` if split |
-| Allowed grids | `MS,SS` for a single block; otherwise separate CV/SV entries |
-| Model | `@models/Blocks/Spaceship/CapacitorPrefab` for the first safe PoC |
+| Display name | `Ship Alert System` |
+| Allowed grids | `Base,MS,SS,GV` (BA, CV, SV, HV) |
+| Model / icon / collision | `TurretEnemyBlack` |
 | Category / Group / IndexName | `Devices` / `cpgSignal` / `RE2Extended` |
 | Class | **none** (class-less activateable device, same pattern as Cruise Amplifier) |
 | Activation | `IsAccessible`, `IsActivateable`, `IsActivateableInCP`, `IsActivatedOnPlace` |
 | Power | `EnergyIn` > 0; feature also gates on `IStructure.IsPowered` |
-| Size | `2,1,1` initially, or match the final model |
+| Size | `1,1,1` |
 | Localization | English only initially |
 
-The final model should be a console/computer model if the user wants a better
-fit. The Capacitor model is only chosen to minimize PoC model/validation risk.
+The `TurretEnemyBlack` model supplies the visual and collision shape. The
+internal block name remains `VoiceInterface` because the runtime resolves it by
+name.
 
 ### 3.2 Stats, recipe, research
 
-These are **not specified** by the requirement. Initial defaults can be
-provisional and balanced later:
+Current values:
 
-- mass: ~500 kg;
-- volume: ~100 L;
-- hit points: ~2000;
-- `EnergyIn`: ~50 W;
-- `CPUIn`: ~200;
-- `MarketPrice`: computed from the final recipe by the existing RE2 material
-  value method;
-- recipe: a small electronics/computer/capacitor recipe;
-- research: deferred until the user chooses the tech-tree parent.
+- mass: 50 kg;
+- volume: 10 L;
+- hit points: 250;
+- `EnergyIn`: 1 W;
+- `CPUIn`: 0;
+- `MarketPrice`: 1038, computed from the recipe material value;
+- recipe: 8 Electronics, 4 Steel Plates, 12 Carbon Substrate
+  (`PlasticMaterial`), 4 Computers, 10 Optical Fiber;
+- research: 12 points, unlock level 5, parent `Eden_TurretTargetPainter`
+  (localized `Target Painter`), tech tree `Misc`.
 
-For the first in-game PoC it is acceptable to place the block in creative mode
-and defer recipe/research polish. Do not invent a `TechTreeParent` that has not
-been verified against the active RE2 config.
+The ECF `TechTreeParent` uses the internal block name
+`Eden_TurretTargetPainter`; the `b3556` form is a save/runtime block ID and not
+a stable ECF parent name. The ID is dynamic per save/load order.
 
 ### 3.3 Signal behaviour
 
@@ -212,6 +221,9 @@ WeaponDestroyed      -> weapon_destroyed      [Critical Hit, Weapon Destroyed]
 GeneratorDestroyed   -> power_unit_destroyed  [Critical Hit, Power Unit Destroyed]
   -> verbal event queue (max 4 events)
   -> alarm channel: Critical Damage Alarm (skip if already playing)
+
+Local structure shield state -> No Shield Alarm (edge-triggered)
+Local Pentaxid tank content -> No Fuel Alarm (edge-triggered)
 ```
 
 Channel rules:
@@ -226,6 +238,15 @@ Channel rules:
 - **Alarm channel**: no queue. Play immediately, unless that alarm's AudioSource
   is already playing. Different alarm IDs use separate AudioSources so they can
   coexist later.
+- **Structure alerts**: a single 333 ms poll of the local player's current
+  structure. It is armed when `IsShieldActive` is true and `ShieldLevel > 0`,
+  then fires once when the level reaches zero. It re-arms only after the shield
+  rises above zero again. The Voice Interface device scan happens only when an
+  alarm is about to fire.
+- **Pentaxid alert**: the same tick reads `IStructure.PentaxidTank.Content`.
+  It arms after a positive amount is seen and fires once when the content
+  reaches zero. A missing tank or a tank that is already empty on entry/load is
+  silent until a positive amount is observed.
 
 ---
 
@@ -502,7 +523,7 @@ unless the user chooses otherwise.
 | # | Gap / question | Proposed PoC default |
 | --- | --- | --- |
 | 1 | What is a “component”? Every block, every device, or the listed functional categories? | Curated component categories (turrets, weapons, thrusters, generators, fuel tanks, warp drives, radar/sensors, power converters, ammo controllers). Hull/armor excluded. |
-| 2 | Which vessels? CV, SV, BA, HV? | CV and SV first. BA optional later. HV excluded. |
+| 2 | Which vessels? CV, SV, BA, HV? | CV, SV, BA, and HV. `AllowPlacingAt: "Base,MS,SS,GV"`. |
 | 3 | Whose ship triggers the sound? | Local player's current piloted structure only. |
 | 4 | Multiplayer: does every client hear every ship, or only their own? | Client-local audio only. Each client hears its own piloted ship. No server replication. |
 | 5 | Multiple Voice Interface blocks on one ship? | Any one active device enables the feature; duplicates do not stack. |
@@ -512,14 +533,14 @@ unless the user chooses otherwise.
 | 9 | Should the same warning repeat for many simultaneous components? | No. Reject a VoiceEvent if the same event is already queued or currently playing. |
 | 10 | Queue limit / drop policy | Maximum 4 pending events; reject the incoming event when full. |
 | 11 | Does “Critical Hit” always precede the specific message? | Yes. The thruster event contains Critical Hit, then Jet Engine Destroyed. |
-| 12 | Which clips are in the PoC? | `voice_critical_hit.wav`, `voice_jet_engine_destroyed.wav`, and `alarm_critical_damage.wav`. |
+| 12 | Which clips are in the PoC? | `voice_critical_hit.wav`, the component-specific voice clips, `alarm_critical_damage.wav`, `alarm_no_shield.wav`, and `alarm_no_fuel.wav`. |
 | 13 | Are the MW2-derived WAVs licensed for redistribution? | User approved using them. They are staged only into the ignored package, not committed. |
 | 14 | 2D cockpit voice or 3D positional sound? | 2D non-spatial voice and alarm for the PoC. |
 | 15 | Audio format support | PCM WAV, 8/16-bit, mono/stereo. Reject others with a log message. |
 | 16 | What happens if the clip is missing? | Feature stays installed; log once; play nothing. |
-| 17 | Block model and aesthetics | `CapacitorMS` for the first safe PoC; replace with a console/computer model after user choice. |
-| 18 | Block stats, recipe, market price, research parent | Provisional low-tier electronics recipe and stats; creative placement first. Research parent requires user/RE2 choice. |
-| 19 | One block for CV+SV or separate blocks? | One `VoiceInterface` with `MS,SS`; split later only if inventory suffix or balance requires it. |
+| 17 | Block model and aesthetics | `TurretEnemyBlack` for the model, icon and collision. |
+| 18 | Block stats, recipe, market price, research parent | MarketPrice 1038; recipe 8 Electronics, 4 SteelPlate, 12 PlasticMaterial, 4 Computer, 10 OpticalFiber; research 12 points at level 5 under `Eden_TurretTargetPainter`. |
+| 19 | One block for CV+SV or separate blocks? | One `VoiceInterface` with `Base,MS,SS,GV`; split later only if inventory suffix or balance requires it. |
 | 20 | Does the block need signal output as well as on/off input? | No for PoC. It is switchable/active; no signal emitter. |
 | 21 | What happens on an unknown/changed game build? | Disable voice feature and log the build/MVID; existing mod features keep their own gates. |
 | 22 | Does the dedicated server need any part of this? | No audio. Do not install the audio feature in dedi master mode. |
@@ -589,12 +610,39 @@ unless the user chooses otherwise.
 
 ### Functional
 
-- Place block on CV and SV; toggle in control panel; toggle by signal.
+- Place block on CV, SV, BA, and HV; toggle in control panel; toggle by signal.
 - Active + powered: Critical Hit plays.
 - Off / unpowered / structure not ready: no sound.
 - No block: no sound.
 - Two blocks: no double playback.
 - Remove block while sound is queued: stop/clear the queue as configured.
+
+### Shield alert
+
+- Shielded ship at positive shield: no No Shield Alarm.
+- Shield damage reaches zero: exactly one `alarm_no_shield.wav`.
+- Shield remains at zero: no repeated alarm while the clip is playing or after it
+  ends.
+- Shield recharges above zero and depletes again: alarm re-arms and plays again.
+- Shieldless ship: no alarm.
+- Shield generator switched off: no alarm.
+- Voice Interface off, unpowered, or absent: no alarm.
+- Boarding a ship already at zero: no alarm until the shield first rises above
+  zero.
+- Switching ships: the monitor follows the new local structure and resets its
+  armed state.
+
+### Fuel alert
+
+- Pentaxid tank positive: no No Fuel Alarm.
+- Pentaxid tank reaches zero: exactly one `alarm_no_fuel.wav`.
+- Tank remains at zero: no repeated alarm.
+- Tank refilled and depleted again: alarm re-arms and plays again.
+- No Pentaxid tank: no alarm and no exception.
+- Boarding/loading a ship already at zero: no alarm until the tank first rises
+  above zero.
+- Shield and fuel both transition: both alarms can play on separate audio
+  sources.
 
 ### Destruction matrix
 
@@ -647,7 +695,7 @@ unless the user chooses otherwise.
 1. **Audio licensing**: may the MW2-derived WAVs be redistributed, or should the
    mod only load a user-supplied local file?
 2. **PoC sound set**: Critical Hit only, or all six supplied clips?
-3. **Vessel scope**: CV/SV only, or also BA (and explicitly not HV)?
+3. **Vessel scope**: CV, SV, BA, and HV.
 4. **Block model**: keep `CapacitorMS` for the PoC, or choose a console/computer
    model now?
 5. **Manual removal**: should picking up or deconstructing a component play the

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 using Eleon.Modding;
 using HarmonyLib;
+using UnityEngine;
 
 namespace RE2Extended.Runtime
 {
@@ -24,12 +25,18 @@ namespace RE2Extended.Runtime
         }
 
         private const string VoiceBlockName = "VoiceInterface";
+        private const float StructureAlertPollIntervalSeconds = 0.333f;
+        private const string NoShieldAlarmId = "no_shield";
+        private const string NoFuelAlarmId = "no_fuel";
+        private const float FuelEmptyEpsilon = 0.001f;
         private const string CriticalHitAudioFile = "voice_critical_hit.wav";
         private const string JetEngineAudioFile = "voice_jet_engine_destroyed.wav";
         private const string TurretAudioFile = "voice_turret_unit_destroyed.wav";
         private const string WeaponAudioFile = "voice_weapon_destroyed.wav";
         private const string PowerAudioFile = "voice_power_unit_destroyed.wav";
         private const string AlarmCriticalDamageAudioFile = "alarm_critical_damage.wav";
+        private const string AlarmNoShieldAudioFile = "alarm_no_shield.wav";
+        private const string AlarmNoFuelAudioFile = "alarm_no_fuel.wav";
 
         private readonly IModApi api;
         private readonly Type registryTokenType;
@@ -51,6 +58,14 @@ namespace RE2Extended.Runtime
         private readonly VoiceEvent turretDestroyedEvent;
         private readonly VoiceEvent weaponDestroyedEvent;
         private readonly VoiceEvent powerDestroyedEvent;
+
+        private GameObject structureAlertObject;
+        private VoiceStructureAlertMonitor structureAlertMonitor;
+        private int alertStructureId = int.MinValue;
+        private bool noShieldAlarmArmed;
+        private bool pentaxidAlarmArmed;
+        private float nextStructureAlertPoll;
+        private bool structureAlertFailureLogged;
 
         private Dictionary<string, int> blockNameToId;
         private Dictionary<int, string> blockIdToName;
@@ -195,6 +210,7 @@ namespace RE2Extended.Runtime
                     controlTableType, conditionDictionaryType, registryControlTableField, joinDrive,
                     actionConditionField, openImage, copyComponent, getBlockPosValue, getAllPositions,
                     xField, yField, zField, modRoot);
+                feature.StartStructureAlertMonitor();
 
                 VoiceInterfaceRemovePatch.Current = feature;
                 harmony.Patch(remove, prefix: new HarmonyMethod(
@@ -204,7 +220,9 @@ namespace RE2Extended.Runtime
 
                 api.Log("[RE2Extended] Voice Interface installed: block=" + VoiceBlockName +
                         " audio=" + feature.CriticalHitPath + ", " + feature.JetEnginePath +
-                        ", " + feature.AlarmCriticalDamagePath +
+                        ", " + feature.AlarmCriticalDamagePath + ", " + feature.AlarmNoShieldPath +
+                        ", " + feature.AlarmNoFuelPath +
+                        " alerts=" + StructureAlertPollIntervalSeconds.ToString("0.###") + "s" +
                         " hook=BlockPosValueList.Remove(Vector3i).");
                 return feature;
             }
@@ -247,6 +265,181 @@ namespace RE2Extended.Runtime
             get { return Path.Combine(modRoot, "Audio", AlarmCriticalDamageAudioFile); }
         }
 
+        private string AlarmNoShieldPath
+        {
+            get { return Path.Combine(modRoot, "Audio", AlarmNoShieldAudioFile); }
+        }
+
+        private string AlarmNoFuelPath
+        {
+            get { return Path.Combine(modRoot, "Audio", AlarmNoFuelAudioFile); }
+        }
+
+        private void StartStructureAlertMonitor()
+        {
+            try
+            {
+                structureAlertObject = new GameObject("RE2Extended_VoiceStructureAlerts");
+                UnityEngine.Object.DontDestroyOnLoad(structureAlertObject);
+                structureAlertMonitor = structureAlertObject.AddComponent<VoiceStructureAlertMonitor>();
+                structureAlertMonitor.Owner = this;
+            }
+            catch (Exception error)
+            {
+                api.Log("[RE2Extended] Voice structure alert monitor disabled: " +
+                        error.GetType().Name + ": " + error.Message);
+                structureAlertMonitor = null;
+                try
+                {
+                    if (structureAlertObject != null)
+                        UnityEngine.Object.Destroy(structureAlertObject);
+                }
+                catch
+                {
+                    // Shutdown must not throw.
+                }
+                structureAlertObject = null;
+            }
+        }
+
+        // Generic per-structure alert tick. Future alerts such as low fuel can
+        // be added here without changing the monitor or its lifecycle.
+        internal void TickStructureAlerts()
+        {
+            try
+            {
+                float now = Time.unscaledTime;
+                if (now < nextStructureAlertPoll) return;
+                nextStructureAlertPoll = now + StructureAlertPollIntervalSeconds;
+
+                IStructure structure = GetLocalStructure();
+                if (structure == null || !structure.IsReady)
+                {
+                    ResetStructureAlertState();
+                    return;
+                }
+
+                if (structure.Id != alertStructureId)
+                {
+                    alertStructureId = structure.Id;
+                    noShieldAlarmArmed = false;
+                    pentaxidAlarmArmed = false;
+                }
+
+                if (!structure.IsPowered)
+                {
+                    noShieldAlarmArmed = false;
+                    pentaxidAlarmArmed = false;
+                    return;
+                }
+
+                CheckShieldAlert(structure);
+                CheckPentaxidAlert(structure);
+            }
+            catch (Exception error)
+            {
+                if (!structureAlertFailureLogged)
+                {
+                    structureAlertFailureLogged = true;
+                    LogOnce("Voice structure alert monitor skipped after error: " +
+                            error.GetType().Name + ": " + error.Message);
+                }
+            }
+        }
+
+        private void CheckShieldAlert(IStructure structure)
+        {
+            bool shieldActive;
+            int shieldLevel;
+            try
+            {
+                shieldActive = structure.IsShieldActive;
+                shieldLevel = structure.ShieldLevel;
+            }
+            catch
+            {
+                return;
+            }
+
+            // A ship without a shield generator, or with its shield switched
+            // off, is never armed. This is also the "has shields" gate: the
+            // native state only leaves Off when a shield is installed and on.
+            if (!shieldActive)
+            {
+                noShieldAlarmArmed = false;
+                return;
+            }
+
+            if (shieldLevel > 0)
+            {
+                noShieldAlarmArmed = true;
+                return;
+            }
+
+            // Edge-triggered: one alarm per depletion, no spam while the
+            // ship remains at zero shields.
+            if (!noShieldAlarmArmed) return;
+
+            // Only scan the device bucket when the alarm is about to fire.
+            if (!HasActiveVoiceInterface(structure)) return;
+
+            player.PlayAlarm(NoShieldAlarmId, AlarmNoShieldPath, LogOnce);
+            noShieldAlarmArmed = false;
+        }
+
+        private void CheckPentaxidAlert(IStructure structure)
+        {
+            IStructureTank tank;
+            try
+            {
+                tank = structure.PentaxidTank;
+            }
+            catch
+            {
+                return;
+            }
+
+            if (tank == null)
+            {
+                pentaxidAlarmArmed = false;
+                return;
+            }
+
+            float content;
+            try
+            {
+                content = tank.Content;
+            }
+            catch
+            {
+                return;
+            }
+
+            // Arm only after a positive amount has been observed. This avoids
+            // playing the alarm for a ship that is already empty on entry/load.
+            if (content > FuelEmptyEpsilon)
+            {
+                pentaxidAlarmArmed = true;
+                return;
+            }
+
+            // Edge-triggered: only fire on the positive-to-zero transition.
+            if (!pentaxidAlarmArmed) return;
+
+            // Only scan the device bucket when the alarm is about to fire.
+            if (!HasActiveVoiceInterface(structure)) return;
+
+            player.PlayAlarm(NoFuelAlarmId, AlarmNoFuelPath, LogOnce);
+            pentaxidAlarmArmed = false;
+        }
+
+        private void ResetStructureAlertState()
+        {
+            alertStructureId = int.MinValue;
+            noShieldAlarmArmed = false;
+            pentaxidAlarmArmed = false;
+        }
+
         internal void HandleRemoval(object list, object blockPosition)
         {
             if (list == null || blockPosition == null) return;
@@ -275,12 +468,7 @@ namespace RE2Extended.Runtime
 
                 if (!structure.IsReady || !structure.IsPowered) return;
 
-                int voiceBlockId = ResolveBlockId(VoiceBlockName);
-                if (voiceBlockId <= 0) return;
-
-                int activeDevices = CountActiveDevices(structure, condition, voiceBlockId);
-                if (activeDevices <= 0)
-                    return;
+                if (!HasActiveVoiceInterface(structure, condition)) return;
 
                 // Verbal channel: the event contains its clips in sequence.
                 // Repeats are suppressed while this event is playing or queued.
@@ -461,6 +649,22 @@ namespace RE2Extended.Runtime
             }
         }
 
+        private bool HasActiveVoiceInterface(IStructure structure)
+        {
+            if (structure == null) return false;
+            return HasActiveVoiceInterface(structure, GetConditionDictionary(structure));
+        }
+
+        private bool HasActiveVoiceInterface(IStructure structure, object condition)
+        {
+            if (structure == null || condition == null) return false;
+
+            int voiceBlockId = ResolveBlockId(VoiceBlockName);
+            if (voiceBlockId <= 0) return false;
+
+            return CountActiveDevices(structure, condition, voiceBlockId) > 0;
+        }
+
         private int CountActiveDevices(IStructure structure, object condition, int blockId)
         {
             try
@@ -597,7 +801,45 @@ namespace RE2Extended.Runtime
         public void Dispose()
         {
             VoiceInterfaceRemovePatch.Current = null;
+
+            try
+            {
+                structureAlertMonitor = null;
+                if (structureAlertObject != null)
+                    UnityEngine.Object.Destroy(structureAlertObject);
+            }
+            catch
+            {
+                // Shutdown must not throw into the game.
+            }
+            finally
+            {
+                structureAlertObject = null;
+                ResetStructureAlertState();
+            }
+
             player.Dispose();
+        }
+    }
+
+    public sealed class VoiceStructureAlertMonitor : MonoBehaviour
+    {
+        internal VoiceInterfaceFeature Owner;
+
+        private void Update()
+        {
+            VoiceInterfaceFeature owner = Owner;
+            if (owner == null) return;
+
+            try
+            {
+                owner.TickStructureAlerts();
+            }
+            catch
+            {
+                // The feature contains its own diagnostics; never let a Unity
+                // callback throw.
+            }
         }
     }
 
