@@ -20,6 +20,7 @@ namespace RE2Extended.Runtime
         private MethodInfo speedTarget;
         private CruiseSpeedContext speedContext;
         private VoiceInterfaceFeature voiceInterface;
+        private ConstructionManager.ConstructionManagerFeature constructionManager;
         private bool disposed;
         private bool localizationCsvLogged;
         private bool localizationCsvErrorLogged;
@@ -49,6 +50,8 @@ namespace RE2Extended.Runtime
             harmony = new Harmony("RE2Extended.runtime");
             DeviceBucketPatch.Configure(game, api, harmony);
             voiceInterface = VoiceInterfaceFeature.TryInstall(game, api, harmony, mode, knownClient);
+            constructionManager = ConstructionManager.ConstructionManagerFeature.TryInstall(
+                game, api, harmony, mode, knownClient);
             InstallIconAliasPatch(api);
 
             InstallLocalization(api);
@@ -293,6 +296,11 @@ namespace RE2Extended.Runtime
         {
             SetLocalization(set, "CruiseAmplifierCV", "Cruise Amplifier (CV)");
             SetLocalization(set, "CruiseAmplifierSV", "Cruise Amplifier (SV)");
+            SetLocalization(set, "ConstructionManager", "Construction Manager");
+            SetLocalization(set, "ConstructionManagerBlocks", "Construction Manager");
+            SetLocalization(set, "bkiConstructionManager",
+                "A construction console that manages named crafting jobs. Open it to create jobs, " +
+                "add template items to a job queue, and later distribute the queue to nearby constructors.");
 
             const string common =
                 "Cruise Amplifiers are standard aftermarket upgrades for commercial vessels for improving sublight travel times. " +
@@ -599,6 +607,19 @@ namespace RE2Extended.Runtime
 
             try
             {
+                if (constructionManager != null)
+                {
+                    constructionManager.Dispose();
+                    constructionManager = null;
+                }
+            }
+            catch
+            {
+                // Shutdown must not throw into the game.
+            }
+
+            try
+            {
                 if (api != null && api.Application != null)
                     api.Application.OnPlayfieldLoaded -= OnPlayfieldLoadedLocalization;
             }
@@ -778,7 +799,9 @@ namespace RE2Extended.Runtime
                 { "CruiseAmplifierCV", "CapacitorMS" },
                 { "CruiseAmplifierSV", "CapacitorMS" },
                 { "VoiceInterface", "TurretEnemyBlack" },
-                { "VoiceInterfaceBlocks", "TurretEnemyBlack" }
+                { "VoiceInterfaceBlocks", "TurretEnemyBlack" },
+                { "ConstructionManager", "ConsoleDesk_C05" },
+                { "ConstructionManagerBlocks", "ConsoleDesk_C05" }
             };
 
         public static void Prefix(ref string value)

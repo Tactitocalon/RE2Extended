@@ -1,0 +1,16 @@
+# RE2Extended - Construction Manager recipe (prototype)
+#
+# Phase 1 only needs a craftable block. Balance and the final MarketPrice must
+# be recomputed from the pinned RE2 ItemsConfig/Templates before release.
+
+{ +Template Name: ConstructionManager
+  CraftTime: 20
+  Target: "SmallC,AdvC"
+  { Child Inputs
+    Electronics: 24
+    SteelPlate: 10
+    Computer: 8
+    PlasticMaterial: 12
+    OpticalFiber: 6
+  }
+}

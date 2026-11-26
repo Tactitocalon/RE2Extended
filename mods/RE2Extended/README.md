@@ -45,6 +45,22 @@ The staged package includes the five voice WAVs, `alarm_critical_damage.wav`,
 SoundWork folder by `build.ps1` into the ignored package. The WAVs are not
 committed to source history.
 
+## Prototype feature: Construction Manager (Phase 0/1)
+
+Adds a `Construction Manager` console block and an in-memory job-manager UI
+spike. Jobs have a name, `Once` type and `Pending`/`Started` status; a template
+pane appends item rows to the selected job queue. Start Job only changes the
+in-memory status in this phase and does not distribute items to constructors.
+
+The UI is a temporary IMGUI fallback backed by a native modal lease for
+cursor/input and Escape handling. It uses a 5-column native-icon template grid
+with category/grid filters and item tooltips, plus icon-based job-queue rows.
+Template clicks merge into existing queue rows; Shift adds 10, Ctrl adds 100 and
+Ctrl+Shift adds 1000. It opens by using the block, pressing F8, or from an
+Escape-menu button while a manager block is on the local structure. See
+[`docs/CONSTRUCTION_MANAGER_PHASE01.md`](docs/CONSTRUCTION_MANAGER_PHASE01.md)
+for the Phase 0 probe marker files, test checklist and open decisions.
+
 ## Install
 
 1. Build the mod with `build.ps1`. Pass `-GameRoot` if Empyrion is installed
@@ -97,6 +113,7 @@ inventory/build menu and when placed. Non-English columns are tracked in
 
 ## Planned / documented
 
+- `docs/CONSTRUCTION_MANAGER_PHASE01.md`
 - `docs/DEVICE_DETECTION_PATTERN.md`
 - `docs/IMPLEMENTATION_PLAN.md`
 - `docs/VOICE_INTERFACE_PLAN.md`

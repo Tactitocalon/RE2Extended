@@ -12,6 +12,37 @@ Rules for this file:
 
 Current baseline: **Empyrion 1.20.1 build 5232**
 
+## Grid / vessel terminology (reused by later features)
+
+Use these mappings consistently in UI, probes and future grid-aware features. The
+same concepts appear under several different native names.
+
+| Player/UI name | Native `AllowPlacingAt` | Native `ClientScope` bit | Template `Target` token |
+| --- | --- | ---: | --- |
+| BA (base) | `Base` | `2` | `BaseC` |
+| CV (capital vessel) | `MS` | `8` | `LargeC` |
+| SV (small vessel) | `SS` | `4` | `SmallC` |
+| HV (hover vessel) | `GV` | `16` | `HoverC` |
+| terrain | `Terrain` | `1` | n/a |
+| unknown/none | `Unknown` | `0` | n/a |
+
+Important distinctions:
+
+- `MS` means **capital vessel / CV**, not “medium ship”. `SS` means **small
+  vessel / SV**, and `GV` means **hover vessel / HV**.
+- UI `BA` corresponds to config token `Base`, not a literal `BA` token.
+- `ClientScope` is a placement/grid bitmask, not a category bitmask. It is parsed
+  from `AllowPlacingAt` by `EmulatorTokenConnectionToken.ClearDialog` using
+  `ActionLayout.ResolveBookmark`. The decoded token table lives in
+  `ActionLayout.colorInitialized`.
+- Constructor **template targets** (`BaseC`, `SmallC`, `LargeC`, `AdvC`,
+  `HoverC`, `SurvC`, `Furn`, `FoodP`, `Decon`, `SuitC`) are a separate namespace
+  from grid/placement tokens. Do not compare them directly to `AllowPlacingAt`.
+- Non-block items have `ClientScope == 0`; the native constructor template
+  browser ignores grid filters for those items.
+- Named blocks can permit multiple grids. Always read the full mask/list, e.g.
+  `Base,MS` = BA + CV, rather than assuming one grid per block.
+
 ---
 
 ## Build 5232
@@ -868,3 +899,166 @@ This affects multiplayer voice design. See
 | Class-less device prototype | client | runtime log | `PublishProject` postfix was active, but a class-less Cruise Amplifier did not appear in the ship device list and `GetDevicePositions` returned no positions. Follow-up: `IsAccessible: true` is the control-panel/block-list visibility property; class-less blocks still need a fixed-ID scan fallback. Speed must use `SaveView()`, not `PublishProject()`. |
 | Block-ID / device stats | workshop + client | config and decompile inspection | Block ID space is `0..4095`: terrain `0..255`, fixed `256..2047`, named `2048..4095`. RE2 uses 1896 fixed IDs with no conflicts for 1521/1522, and 1517 named blocks mapping to 2048..3563. Teleporter class is `Teleporter`. `MarketPrice` is explicit (RE2 normally recipe material value); medium fuel tanks provide the requested blast/radiation values. |
 | Multiplayer network capability | client + dedi | `NetworkBridge` inspection | Client can send to dedicated; dedicated can send to playfield server; `SendToPlayer` returns `false` in both inspected assemblies. Server-to-client mod packet delivery is unverified and likely unavailable through the public API on build 5232. |
+
+---
+
+## Construction Manager Phase 0 static contracts (build 5232 client)
+
+Status: **static evidence only; runtime probe code added, not yet verified in a
+test world.** Target client MVID
+`462483cd-2f1f-4a24-9c83-46d24b1cb3f4`. See
+`mods/RE2Extended/docs/CONSTRUCTION_MANAGER_PHASE01.md`.
+
+### Save path
+
+`Eleon.ModBridge.ApplicationBridgeCommon.GetPathFor(AppFolder.SaveGame)` maps to
+`DiskEditor.SortMemory()` on the client. `AppFolder.Root`,
+`AppFolder.Content`, `AppFolder.Mod`, `AppFolder.Cache` map through
+`FormResolverConnectionToken` helpers. The runtime probe logs the returned
+paths, whether they exist, and the candidate
+`<save>/Mods/RE2Extended/ConstructionManager.json`, but it has not yet confirmed
+whether the returned value is the active save folder or the `Saves` root.
+
+### Constructor enumeration and queue access
+
+Static evidence:
+
+- `StructureBridge.GetDevicePositions(string)` reads
+  `ecc.keywordsID.keywordsID.keywordsID.SortMemory(customDeviceName)` and
+  converts the native `Vector3i` values to `VectorInt3`.
+- `StructureBridge.GetDevice<T>(string)` uses
+  `ecc.keywordsID.keywordsID.keywordsID.FindDockingPane(blockName)` and then
+  casts the native `NodeHelper` at that position to `T`.
+- `StructureBridge.GetDevice<T>(int,int,int)` calls
+  `ecc.keywordsID.ViewConnection(new Vector3i(...))` and casts the result.
+- `BookmarkInvoker : NodeHelper, IContainer, IDevice`; constructor tile entities
+  derive from `ActivatorSettings : BookmarkInvoker`, so `IContainer` queue methods
+  are statically reachable through `GetDevice<IContainer>(position)`.
+- `ConditionDictionary.DeviceIDs` contains `Constructor = 41` (enum starts at
+  `FuelTank = 1`). `ConditionDictionary.RemoveTextFile()` iterates
+  `0..41`, which confirms the device buckets use those enum names and includes
+  `"Constructor"`.
+- `ConditionDictionary.OpenImage(string)` returns a `BlockPosValueList`, and
+  `BlockPosValueList.GetAllBlockPositonsOfType(int)` filters entries by the
+  registry block type. This is the intended multi-instance enumeration path:
+  open `"Constructor"`, then query each whitelisted block ID.
+- `BlockPosValueList.GetAt(int)` and the indexer expose the stored
+  `RegistryToken`, whose native `Vector3i` position can be read by reflection.
+
+The Phase 0 probe cross-checks the `"Constructor"` bucket against the public
+`GetDevicePositions(blockName)` list and logs both counts for every whitelisted
+constructor. It then reads `GetContent()` from the named device and the first
+positional device. Queue mutation is opt-in and restores the original content
+with `SetContent`.
+
+### Manager block interaction
+
+`ActionLayout.SortFunction(Vector3i)` returns a block display string, and the
+native default device-use path raises:
+
+```text
+GameEventType.DeviceUsed, ActionLayout.SortFunction(position), ...
+```
+
+The Phase 1 implementation matches `DeviceUsed` argument 1 against
+`ConstructionManager` / `Construction Manager`, then checks that the local
+structure contains a manager block. This is a static hypothesis until the Phase
+0 event log confirms that the chosen `Class: Switch` console block raises
+`DeviceUsed`. `F8` and the Escape-menu entry are deliberate fallback openers.
+
+### Native modal lease for mod-owned UI
+
+Static evidence from build 5232, also demonstrated by the third-party Trade
+Ledger project:
+
+- `IGui.ShowDialog(DialogConfig, DialogActionHandler, int)` creates a normal local
+  native modal and owns cursor/input and Escape behavior.
+- `Assembly-CSharp.RegistryTreeConnectionToken` owns the native UI window stack
+  and registry. Its static getter returns the singleton manager.
+- Window registry entries expose a root `GameObject`, a `CanvasGroup`, and a
+  controller object. A dialog entry's controller is
+  `Assembly-CSharp.StreamDesignerConnectionToken`, which stores the exact
+  `DialogConfig` and `DialogActionHandler` used to create it.
+- Setting the entry's `CanvasGroup.alpha = 0` hides the empty native dialog while
+  preserving its input lease; the mod then draws its own IMGUI surface.
+- The manager close method is the instance `RegistryTreeConnectionToken.CloseXmlFile()`
+  returning `bool`.
+
+RE2Extended resolves these members by type/shape and fails closed if the contract
+is ambiguous. It does not copy Trade Ledger code or use its metadata tokens. The
+UI is only adopted when the native window stack is empty; otherwise the open
+request waits for a short handoff after the foreign/native window closes.
+
+This proves a viable mod-owned UI path, not native constructor-window reuse.
+
+### Item metadata and icon atlas for the manager UI
+
+Build 5232 static contracts used by the Construction Manager UI:
+
+- `AddinEditor.keywordsID` is the static `AddinEditor[]` definition table.
+- `AddinEditor::keywordsID` is the definition's `DynamicProperties`; the private
+  `AddinEditor::userDataList` string is the internal item/block name.
+- `DynamicProperties.HasKey(string)` and `GetStringValue(string)` expose
+  `CustomName`, `CustomIcon`, `Info`, `Category` and `AllowPlacingAt` and related
+  ECF properties. The manager maps category text to its seven constructor-style
+  filters and maps `AllowPlacingAt` tokens Base/BA, MS, SS and GV to BA/CV/SV/HV.
+- Active names/descriptions are localized through NGUI `Localization.Exists` and
+  `Localization.Get(string,bool)`.
+- `MenuSiteConnectionToken::keywordsID` is a static UI manager singleton. Its
+  `ProcessManagerConnectionToken` field holds the packed item-icon atlas:
+  a `Texture2D` plus `List<UISpriteData>` with name/x/y/width/height.
+- IMGUI can draw a sprite sub-rect with
+  `GUI.DrawTextureWithTexCoords(texture, uv, true)`, where the V coordinate is
+  flipped from the native atlas rectangle.
+
+The runtime resolves these by type/shape and falls back to loaded `UIAtlas`
+resources if the packed atlas is unavailable.
+
+Native constructor template filtering is exposed by
+`SymbolService.AllocateDockingPane(string target)`, which returns the
+`NodeProvider` list for a constructor target abbreviation. RE2Extended calls it
+for `BaseC`, `SmallC`, `LargeC` and `AdvC` and unions the output item types. This
+is the same path used by `ActivatorSettings.BatchBuildDevice()`.
+
+Native category and grid metadata:
+
+- Item category: `AddinEditor` Category property (native `messageCollection`).
+- Block category: `RegistryOptions.optionsID`, parsed from the block Category
+  property, falling back to `Miscellaneous`.
+- Block grid type: `RegistryOptions` `ClientScope`, parsed from
+  `AllowPlacingAt`. Decoded mapping: `Base = 2`, `SS = 4`, `MS = 8`, `GV = 16`
+  (`Terrain = 1`). The UI maps `Base -> BA`, `MS -> CV`, `SS -> SV`, `GV -> HV`.
+- Non-block items have scope `0`; the native template browser ignores the grid
+  filter for those items.
+- Block display metadata for template cells lives in the `RegistryOptions`
+  `DynamicProperties` (`CustomName`, `CustomIcon`, `Info`), not only in
+  `AddinEditor`. `AdvancedDecoDeviceBlocks` is the reference case.
+- Native template order: `ItemGridTemplates.JoinAspect` sorts `DialogEventArgs`
+  by `DialogEventArgs.DeployXmlFile`, which compares craft/unlock state and then
+  the original `DialogEventArgs.colorInitialized` index. That index is assigned
+  from the order returned by `SymbolService.AllocateDockingPane`, itself a
+  subsequence of the global `SymbolService` recipe list. RE2Extended preserves
+  that global list order, giving Graphite, Iron Ore, Copper Ore first in
+  Components.
+
+### Deferred runtime checks
+
+- [ ] `GetPathFor(AppFolder.SaveGame)` = active save folder vs saves root.
+- [ ] All seven whitelisted constructors appear in the `"Constructor"` bucket.
+- [ ] `GetDevice<IContainer>(position)` returns a working queue for each
+      constructor class in the whitelist.
+- [ ] `AddItems`/`RemoveItems`/`SetContent` change the visible queue and the
+      restore path leaves it unchanged.
+- [ ] Multiple constructors with the same block name enumerate correctly.
+- [ ] `DeviceUsed` fires for the manager console and carries the expected
+      display string.
+- [ ] The empty `IGui.ShowDialog` modal is accepted and `CanvasGroup` concealment
+      leaves cursor/input under modal control.
+- [ ] The Escape-menu entry appears only with a manager block and closes the
+      native menu before the manager adopts its own modal.
+- [ ] Manager render is suppressed when another native window becomes topmost.
+- [ ] The packed `ProcessManagerConnectionToken` atlas supplies the expected
+      item icons, and missing icons degrade to placeholders.
+- [ ] `DynamicProperties.Info` plus localization produces readable item tooltips.
+- [ ] `IStructure.Id` + manager position is stable across save/restart,
+      rename, docking and playfield reload.

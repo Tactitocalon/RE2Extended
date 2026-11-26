@@ -1,0 +1,79 @@
+# RE2Extended - Construction Manager (Phase 1 prototype)
+#
+# Interactive console block used to open the in-memory Construction Manager UI.
+# The native Switch class is used only to provide a normal device-use path; the
+# manager window itself is mod-owned and does not replace any native window.
+#
+# Detection uses the RE2Extended ConditionDictionary bucket plus the block name.
+# No fixed block ID is used.
+
+{ +Block Name: ConstructionManager
+  Material: Device
+  Class: Switch
+  Shape: ModelEntity
+  ShowBlockName: true
+  TemplateRoot: ConstructionManagerBlocks
+  Model: @models2/Entities/Decorations/Consoles/ConsoleDesk_C05_Prefab
+  DropMeshfile: Entities/Misc/DropContainerNewPrefab
+  Place: Free
+  RemoveOnSI: true
+  StabilitySupport: false
+  IsAccessible: true, type: bool
+  IsActivateable: true
+  IsActivateableInCP: true
+  IsActivatedOnPlace: true
+  IsLockable: true
+  IsDuplicateable: false
+  AllowedInBlueprint: true
+  IsOxygenTight: false, display: true
+  AllowPlacingAt: "Base,MS,SS,GV", display: true
+  SizeInBlocks: "1,1,1", display: true
+  SizeInBlocksLocked: "Base,MS,SS,GV"
+  StackSize: 1000
+  BlockColor: "110,110,110"
+  Category: Devices
+  Group: cpgConsoles
+  IndexName: RE2Extended
+  Info: bkiConstructionManager, display: true
+  CustomIcon: ConsoleDesk_C05
+  Mass: 150, type: float, display: true, formatter: Kilogram
+  Volume: 800, type: float, display: true, formatter: Liter
+  HitPoints: 500, type: int, display: true
+  EnergyIn: 1, type: int, display: true, formatter: Watt
+  CPUIn: 0, type: int, display: true
+  MarketPrice: 1650, display: true
+  BlastParticleIndex: 10
+  BlastRadius: 0
+  BlastDamage: 0
+  ShowUser: Yes
+  UnlockCost: 12, display: true
+  UnlockLevel: 8, display: true
+  TechTreeParent: Eden_ButtonPanel
+  TechTreeNames: "Capital Vessel, Small Vessel, Base"
+}
+
+# Inventory/build-menu group, following the vanilla thruster/LCD pattern.
+{ +Block Name: ConstructionManagerBlocks
+  IndexName: RE2Extended
+  Group: cpgConsoles
+  Material: Device
+  Shape: Invisible
+  Place: Free
+  DropMeshfile: Entities/Misc/DropContainerNewPrefab
+  StackSize: 1000
+  Category: Devices
+  CustomIcon: ConsoleDesk_C05
+  ChildBlocks: "ConstructionManager"
+  AllowPlacingAt: "Base,MS,SS,GV", display: true
+  SizeInBlocks: "1,1,1", display: true
+  BlockColor: "110,110,110"
+  Info: bkiConstructionManager, display: true
+  IsOxygenTight: false, display: true
+  Mass: 150, type: float, display: true, formatter: Kilogram
+  Volume: 800, type: float, display: true, formatter: Liter
+  HitPoints: 500, type: int, display: true
+  EnergyIn: 1, type: int, display: true, formatter: Watt
+  CPUIn: 0, type: int, display: true
+  MarketPrice: 1650, display: true
+  ShowUser: Yes
+}

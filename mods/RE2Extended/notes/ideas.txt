@@ -92,16 +92,24 @@ Boost Capacitor
 
 Constructor Manager
  - Use ConsoleDesk_C05
- - Has a new UI - the mass constructor UI.
- - Has a "Job Request" and a "Templates" search, like a normal constructor.
- - "Job Request" is NOT like the actual constructor queue - it's a list of items to submit to all the constructors.
- - The Job Request window has a "Submit" button, and a "Clear" button.
- - Has all the constructor recipes (use Universal Constructor?)
- - Instead of Input / Output, it has an interface that allows the user to "slave" constructors to the Constructor Manager.
- It also shows each slaved constructor, what item it is currently working on, and how many number of items are left for that constructor.
- You can cancel the queue for each individual constructor, or all at once with a "Cancel All" buttons.
-- You can queue up a bunch of items to be submitted to the constructors as a bulk build request, then hit submit. The requested recipes
-are then distributed evenly to all slaved constructors that can actually process the recipe.
+ - Has a new UI - the mass constructor UI. This should be based off the normal Constructor UI.
+ - Right side: templates, just like the normal Constructor UI.
+ - Middle: construction queue, just like the normal Constructor UI. It won't function the same way, though. We will call this the "Job Queue".
+   - The Job Queue UI will ONLY have the input section, NOT the output section.
+   - The output section will have some controls: "Start Job", "Cancel Job".
+ - Left side: the new "job manager" UI.
+ - Job Manager UI:
+   - List of "jobs". In the Job List, each job has a "Name", "Type", and "Completed".
+   - For now, Type will be a stub. For Type, just put "Once".
+   - At the bottom of the Job Manager UI will be a button for "New Job".
+ - When the user creates a "New Job", it creates a new row in the Job Manager UI.
+ - Selecting a Job will show all the items queued for that job in the Job Queue. A newly created job will be treated as "Pending"
+ - Clicking an item in the Templates section will queue that item in the Job Queue.
+ - Clicking "Start Job" will distribute all items in the Job Queue to all constructors on the ship. Items are distributed evenly, with consideration
+   to which constructors can actually process which items. For example, if an item requires a Universal Constructor, that item will be evenly distributed
+   to all Universal Constructors.
+ - Once a job is started, the Completed status moves to "Started", and the Start Job button is disabled for that job.
+ - The "Cancel Job" button will remove that job from the job manager. In the future, we will also use it to cancel the queued items from all construction managers.
 
 Fuel Distribution Regulator
  - CV / BA
