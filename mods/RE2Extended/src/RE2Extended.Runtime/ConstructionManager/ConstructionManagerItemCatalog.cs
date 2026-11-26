@@ -60,7 +60,7 @@ namespace RE2Extended.Runtime.ConstructionManager
                 {
                     displayNameLoaded = true;
                     string custom = IsBlock
-                        ? catalog.ReadBlockProperty(ItemType, "CustomName")
+                        ? catalog.ReadBlockProperty(ItemType, InternalName, "CustomName")
                         : null;
                     if (string.IsNullOrEmpty(custom))
                         custom = catalog.ReadProperty(definition, "CustomName");
@@ -80,7 +80,7 @@ namespace RE2Extended.Runtime.ConstructionManager
                 {
                     descriptionLoaded = true;
                     string info = IsBlock
-                        ? catalog.ReadBlockProperty(ItemType, "Info")
+                        ? catalog.ReadBlockProperty(ItemType, InternalName, "Info")
                         : null;
                     if (string.IsNullOrEmpty(info))
                         info = catalog.ReadProperty(definition, "Info");
@@ -100,7 +100,7 @@ namespace RE2Extended.Runtime.ConstructionManager
                 {
                     iconNameLoaded = true;
                     string custom = IsBlock
-                        ? catalog.ReadBlockProperty(ItemType, "CustomIcon")
+                        ? catalog.ReadBlockProperty(ItemType, InternalName, "CustomIcon")
                         : null;
                     if (string.IsNullOrEmpty(custom))
                         custom = catalog.ReadProperty(definition, "CustomIcon");
@@ -118,7 +118,7 @@ namespace RE2Extended.Runtime.ConstructionManager
                 {
                     categoryLoaded = true;
                     if (IsBlock)
-                        category = catalog.ReadBlockCategory(ItemType);
+                        category = catalog.ReadBlockCategory(ItemType, InternalName);
                     if (string.IsNullOrEmpty(category))
                         category = catalog.ReadProperty(definition, "Category");
                 }
@@ -133,7 +133,7 @@ namespace RE2Extended.Runtime.ConstructionManager
                 if (!gridLoaded)
                 {
                     gridLoaded = true;
-                    gridMask = IsBlock ? catalog.ReadBlockGridMask(ItemType) : -1;
+                    gridMask = IsBlock ? catalog.ReadBlockGridMask(ItemType, InternalName) : -1;
                 }
                 return gridMask;
             }
@@ -189,10 +189,14 @@ namespace RE2Extended.Runtime.ConstructionManager
         private readonly Type registryOptionsType;
         private readonly FieldInfo registryDefinitionsField;
         private readonly FieldInfo registryPropertiesField;
+        private readonly FieldInfo registryNameField;
         private readonly FieldInfo registryCategoryField;
         private readonly FieldInfo registryScopeField;
 
         private readonly Dictionary<string, object> definitions =
+            new Dictionary<string, object>(StringComparer.Ordinal);
+        private readonly Dictionary<int, string> idToName = new Dictionary<int, string>();
+        private readonly Dictionary<string, object> registryBlocksByName =
             new Dictionary<string, object>(StringComparer.Ordinal);
         private readonly Dictionary<string, ConstructionManagerItemDefinition> wrappers =
             new Dictionary<string, ConstructionManagerItemDefinition>(StringComparer.Ordinal);
@@ -206,7 +210,8 @@ namespace RE2Extended.Runtime.ConstructionManager
             MethodInfo localizeMethod, MethodInfo localizeExistsMethod,
             ConstructionManagerIconCatalog icons, Type registryOptionsType,
             FieldInfo registryDefinitionsField, FieldInfo registryPropertiesField,
-            FieldInfo registryCategoryField, FieldInfo registryScopeField)
+            FieldInfo registryNameField, FieldInfo registryCategoryField,
+            FieldInfo registryScopeField)
         {
             this.api = api;
             this.game = game;
@@ -223,6 +228,7 @@ namespace RE2Extended.Runtime.ConstructionManager
             this.registryOptionsType = registryOptionsType;
             this.registryDefinitionsField = registryDefinitionsField;
             this.registryPropertiesField = registryPropertiesField;
+            this.registryNameField = registryNameField;
             this.registryCategoryField = registryCategoryField;
             this.registryScopeField = registryScopeField;
         }
@@ -279,6 +285,10 @@ namespace RE2Extended.Runtime.ConstructionManager
                     ? null
                     : registryType.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
                         .FirstOrDefault(f => f.FieldType == dynamicPropertiesType);
+                FieldInfo registryNameField = registryType == null
+                    ? null
+                    : registryType.GetField("userDataInitialized",
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                 FieldInfo registryCategoryField = registryType == null
                     ? null
                     : registryType.GetField("optionsID",
@@ -302,7 +312,7 @@ namespace RE2Extended.Runtime.ConstructionManager
                     dynamicPropertiesType, definitionsField, propertiesField, nameField,
                     hasKey, getString, localize, exists, icons, registryType,
                     registryDefinitionsField, registryPropertiesField,
-                    registryCategoryField, registryScopeField);
+                    registryNameField, registryCategoryField, registryScopeField);
             }
             catch (Exception error)
             {
@@ -327,6 +337,13 @@ namespace RE2Extended.Runtime.ConstructionManager
             direct = assembly.GetType(name, false);
             if (direct != null) return direct;
             return assembly.GetTypes().FirstOrDefault(t => t != null && t.Name == name);
+        }
+
+        internal string GetInternalName(int itemType)
+        {
+            EnsureLoaded();
+            string name;
+            return idToName.TryGetValue(itemType, out name) ? name : null;
         }
 
         internal ConstructionManagerItemDefinition Get(string internalName, int itemType)
@@ -363,9 +380,9 @@ namespace RE2Extended.Runtime.ConstructionManager
             }
         }
 
-        internal string ReadBlockProperty(int itemType, string name)
+        internal string ReadBlockProperty(int itemType, string internalName, string name)
         {
-            object block = GetRegistryDefinition(itemType);
+            object block = GetRegistryDefinition(itemType, internalName);
             if (block == null || registryPropertiesField == null) return null;
             try
             {
@@ -381,17 +398,17 @@ namespace RE2Extended.Runtime.ConstructionManager
             }
         }
 
-        internal string ReadBlockCategory(int itemType)
+        internal string ReadBlockCategory(int itemType, string internalName)
         {
-            object block = GetRegistryDefinition(itemType);
+            object block = GetRegistryDefinition(itemType, internalName);
             if (block == null || registryCategoryField == null) return null;
             try { return registryCategoryField.GetValue(block) as string; }
             catch { return null; }
         }
 
-        internal int ReadBlockGridMask(int itemType)
+        internal int ReadBlockGridMask(int itemType, string internalName)
         {
-            object block = GetRegistryDefinition(itemType);
+            object block = GetRegistryDefinition(itemType, internalName);
             if (block == null || registryScopeField == null) return -1;
             try
             {
@@ -409,17 +426,52 @@ namespace RE2Extended.Runtime.ConstructionManager
             }
         }
 
-        private object GetRegistryDefinition(int itemType)
+        private object GetRegistryDefinition(int itemType, string internalName)
         {
-            if (itemType <= 0 || registryDefinitionsField == null) return null;
+            if (registryDefinitionsField == null) return null;
             try
             {
                 Array blocks = registryDefinitionsField.GetValue(null) as Array;
-                return blocks == null || itemType >= blocks.Length ? null : blocks.GetValue(itemType);
+                if (blocks != null && itemType > 0 && itemType < blocks.Length)
+                {
+                    object direct = blocks.GetValue(itemType);
+                    if (direct != null) return direct;
+                }
+
+                EnsureRegistryNameMap();
+                object byName;
+                if (!string.IsNullOrEmpty(internalName) &&
+                    registryBlocksByName.TryGetValue(internalName, out byName))
+                    return byName;
             }
             catch
             {
-                return null;
+                // Fall through to null.
+            }
+            return null;
+        }
+
+        private void EnsureRegistryNameMap()
+        {
+            if (registryBlocksByName.Count > 0 || registryDefinitionsField == null ||
+                registryNameField == null) return;
+
+            try
+            {
+                Array blocks = registryDefinitionsField.GetValue(null) as Array;
+                if (blocks == null || blocks.Length > 8192) return;
+                for (int i = 1; i < blocks.Length; i++)
+                {
+                    object block = blocks.GetValue(i);
+                    if (block == null) continue;
+                    string name = registryNameField.GetValue(block) as string;
+                    if (!string.IsNullOrEmpty(name) && !registryBlocksByName.ContainsKey(name))
+                        registryBlocksByName[name] = block;
+                }
+            }
+            catch
+            {
+                // Registry name lookup is a fallback only.
             }
         }
 
@@ -493,6 +545,7 @@ namespace RE2Extended.Runtime.ConstructionManager
                     int mappedId;
                     if (!mapping.TryGetValue(name, out mappedId)) continue;
                     definitions[name] = definition;
+                    idToName[mappedId] = name;
                     found++;
                 }
 

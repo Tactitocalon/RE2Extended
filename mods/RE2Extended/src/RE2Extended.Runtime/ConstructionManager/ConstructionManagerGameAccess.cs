@@ -268,7 +268,7 @@ namespace RE2Extended.Runtime.ConstructionManager
             }
         }
 
-        private bool TryReadNativePosition(object position, out int x, out int y, out int z)
+        internal bool TryReadNativePosition(object position, out int x, out int y, out int z)
         {
             x = y = z = 0;
             if (position == null || vectorXField == null || vectorYField == null || vectorZField == null)

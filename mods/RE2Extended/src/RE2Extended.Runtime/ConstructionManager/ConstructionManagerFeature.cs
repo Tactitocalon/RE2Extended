@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using Eleon.Modding;
 using HarmonyLib;
@@ -26,6 +28,8 @@ namespace RE2Extended.Runtime.ConstructionManager
         private int cachedManagerStructureId = int.MinValue;
         private bool cachedManagerAvailable;
         private float nextManagerCheck;
+        private float suppressNativeUntil;
+        private bool inventoryNativeSeen;
 
         private ConstructionManagerFeature(IModApi api,
             ConstructionManagerBlock managerBlock,
@@ -196,13 +200,36 @@ namespace RE2Extended.Runtime.ConstructionManager
                 if (Input.GetKeyDown(KeyCode.F8))
                     RequestOpen(structure);
 
+                if (suppressNativeUntil > 0f)
+                {
+                    if (Time.unscaledTime > suppressNativeUntil)
+                    {
+                        suppressNativeUntil = 0f;
+                    }
+                    else if (lease != null)
+                    {
+                        if (lease.HasForeignWindow)
+                        {
+                            inventoryNativeSeen = true;
+                            lease.CloseForeignTop();
+                        }
+                    }
+                }
+
                 if (pendingOpenUntil > 0f)
                 {
                     if (Time.unscaledTime > pendingOpenUntil)
                     {
                         pendingOpenUntil = 0f;
+                        suppressNativeUntil = 0f;
+                        inventoryNativeSeen = false;
                         ConstructionManagerDiagnostics.Log(api,
                             "Open request expired while waiting for the native window stack to clear.");
+                    }
+                    else if (!inventoryNativeSeen && suppressNativeUntil > 0f &&
+                             Time.unscaledTime <= suppressNativeUntil)
+                    {
+                        // Give the native container window a chance to appear and be closed.
                     }
                     else
                     {
@@ -273,6 +300,8 @@ namespace RE2Extended.Runtime.ConstructionManager
             }
 
             pendingOpenUntil = Time.unscaledTime + PendingOpenSeconds;
+            suppressNativeUntil = 0f;
+            inventoryNativeSeen = false;
             ConstructionManagerDiagnostics.Log(api,
                 "Manager open requested; waiting for an empty native window stack.");
             TryOpenPending(structure);
@@ -343,6 +372,8 @@ namespace RE2Extended.Runtime.ConstructionManager
         private void Close()
         {
             pendingOpenUntil = 0f;
+            suppressNativeUntil = 0f;
+            inventoryNativeSeen = false;
             if (window != null) window.Close();
             if (lease != null)
             {
@@ -368,11 +399,39 @@ namespace RE2Extended.Runtime.ConstructionManager
             {
                 probe.ObserveGameEvent(type, arg1, arg2, arg3, arg4, arg5);
 
-                if (type == GameEventType.DeviceUsed && managerBlock.IsManagerUse(arg1))
+                IStructure structure = GetLocalStructure();
+                if (structure == null) return;
+
+                if ((type == GameEventType.DeviceUsed ||
+                     type == GameEventType.DeviceNamePowered) &&
+                    managerBlock.IsManagerUse(arg1))
                 {
-                    IStructure structure = GetLocalStructure();
-                    if (structure != null && managerBlock.ExistsOn(structure))
+                    if (managerBlock.ExistsOn(structure))
+                    {
+                        ConstructionManagerDiagnostics.Log(api,
+                            "Manager open requested from " + type + "(" + arg1 + ").");
                         RequestOpen(structure);
+                    }
+                    return;
+                }
+
+                if (type == GameEventType.InventoryOpened &&
+                    managerBlock.IsManagerEventPosition(structure, arg1, arg2, arg3, arg4, arg5))
+                {
+                    ConstructionManagerDiagnostics.Log(api,
+                        "Manager inventory interaction detected; suppressing native container and opening manager.");
+                    pendingOpenUntil = Time.unscaledTime + PendingOpenSeconds;
+                    suppressNativeUntil = Time.unscaledTime + 1.5f;
+                    inventoryNativeSeen = false;
+                    return;
+                }
+
+                if (type == GameEventType.BlockChanged &&
+                    managerBlock.IsManagerBlockEvent(structure, arg5))
+                {
+                    ConstructionManagerDiagnostics.Log(api,
+                        "Manager open requested from BlockChanged at the manager block.");
+                    RequestOpen(structure);
                 }
             }
             catch (Exception error)

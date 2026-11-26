@@ -1,15 +1,16 @@
 # RE2Extended - Construction Manager (Phase 1 prototype)
 #
 # Interactive console block used to open the in-memory Construction Manager UI.
-# The native Switch class is used only to provide a normal device-use path; the
-# manager window itself is mod-owned and does not replace any native window.
+# The native ArmorLocker container class provides look-at interaction and
+# device-list access; the manager intercepts the native inventory-open event and
+# replaces it with the mod-owned manager window.
 #
 # Detection uses the RE2Extended ConditionDictionary bucket plus the block name.
 # No fixed block ID is used.
 
 { +Block Name: ConstructionManager
   Material: Device
-  Class: Switch
+  Class: ArmorLocker
   Shape: ModelEntity
   ShowBlockName: true
   TemplateRoot: ConstructionManagerBlocks
@@ -32,12 +33,14 @@
   StackSize: 1000
   BlockColor: "110,110,110"
   Category: Devices
-  Group: cpgConsoles
+  Group: cpgRepair
   IndexName: RE2Extended
   Info: bkiConstructionManager, display: true
   CustomIcon: ConsoleDesk_C05
   Mass: 150, type: float, display: true, formatter: Kilogram
   Volume: 800, type: float, display: true, formatter: Liter
+  VolumeCapacity: 1000, type: float, display: true, formatter: Liter
+  GridSize: "5,3"
   HitPoints: 500, type: int, display: true
   EnergyIn: 1, type: int, display: true, formatter: Watt
   CPUIn: 0, type: int, display: true
@@ -55,7 +58,7 @@
 # Inventory/build-menu group, following the vanilla thruster/LCD pattern.
 { +Block Name: ConstructionManagerBlocks
   IndexName: RE2Extended
-  Group: cpgConsoles
+  Group: cpgRepair
   Material: Device
   Shape: Invisible
   Place: Free
@@ -71,6 +74,8 @@
   IsOxygenTight: false, display: true
   Mass: 150, type: float, display: true, formatter: Kilogram
   Volume: 800, type: float, display: true, formatter: Liter
+  VolumeCapacity: 1000, type: float, display: true, formatter: Liter
+  GridSize: "5,3"
   HitPoints: 500, type: int, display: true
   EnergyIn: 1, type: int, display: true, formatter: Watt
   CPUIn: 0, type: int, display: true

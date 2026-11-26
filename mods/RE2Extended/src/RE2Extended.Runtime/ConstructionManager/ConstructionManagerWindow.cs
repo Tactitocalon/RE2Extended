@@ -79,7 +79,7 @@ namespace RE2Extended.Runtime.ConstructionManager
         {
             Classify();
             if (grid == ConstructionManagerGridType.All) return true;
-            if (!placeable || gridMask == 0) return true;
+            if (!placeable || gridMask == 0) return false;
 
             int bit = GridBit(grid);
             return bit != 0 && (gridMask & bit) != 0;
@@ -158,6 +158,7 @@ namespace RE2Extended.Runtime.ConstructionManager
         private Vector2 templateScroll;
         private string hoveredName;
         private string hoveredDescription;
+        private int hoveredItemType = -1;
         private ConstructionManagerCategory selectedCategory = ConstructionManagerCategory.Components;
         private ConstructionManagerGridType selectedGrid = ConstructionManagerGridType.All;
 
@@ -246,6 +247,7 @@ namespace RE2Extended.Runtime.ConstructionManager
         {
             hoveredName = null;
             hoveredDescription = null;
+            hoveredItemType = -1;
 
             GUILayout.BeginVertical();
             GUILayout.BeginHorizontal();
@@ -520,6 +522,7 @@ namespace RE2Extended.Runtime.ConstructionManager
             {
                 hoveredName = template.DisplayName;
                 hoveredDescription = template.Description;
+                hoveredItemType = template.ItemType;
             }
         }
 
@@ -547,6 +550,7 @@ namespace RE2Extended.Runtime.ConstructionManager
             ConstructionManagerItemDefinition definition = itemCatalog == null
                 ? null
                 : itemCatalog.Get(internalName, itemType);
+            hoveredItemType = itemType;
             hoveredName = definition == null ? fallbackName : definition.DisplayName;
             hoveredDescription = definition == null ? "No description available." : definition.Description;
         }
@@ -610,10 +614,12 @@ namespace RE2Extended.Runtime.ConstructionManager
         {
             if (string.IsNullOrEmpty(hoveredName)) return;
 
-            float width = Math.Min(430f, windowRect.width - 32f);
-            float textHeight = tooltipTextStyle.CalcHeight(
-                new GUIContent(hoveredDescription ?? string.Empty), width - 20f);
-            float height = Math.Min(280f, Math.Max(78f, textHeight + 62f));
+            string body = BuildTooltipBody();
+            float width = Math.Min(470f, windowRect.width - 32f);
+            float bodyHeight = tooltipTextStyle.CalcHeight(
+                new GUIContent(body), width - 20f);
+            float height = Math.Min(Math.Max(140f, windowRect.height - 24f),
+                Math.Max(84f, bodyHeight + 57f));
             Vector2 mouse = Event.current.mousePosition;
             float x = Math.Min(mouse.x + 18f, windowRect.width - width - 12f);
             float y = Math.Min(mouse.y + 18f, windowRect.height - height - 12f);
@@ -622,10 +628,166 @@ namespace RE2Extended.Runtime.ConstructionManager
 
             Rect rect = new Rect(x, y, width, height);
             GUI.Box(rect, GUIContent.none, tooltipBoxStyle);
-            GUI.Label(new Rect(rect.x + 10f, rect.y + 7f, rect.width - 20f, 24f),
-                hoveredName, tooltipTitleStyle);
+            GUI.Label(new Rect(rect.x + 10f, rect.y + 7f, rect.width - 20f, 26f),
+                "<b>" + ConstructionManagerTooltipText.ToUnityRichText(hoveredName) + "</b>",
+                tooltipTitleStyle);
             GUI.Label(new Rect(rect.x + 10f, rect.y + 33f, rect.width - 20f, rect.height - 41f),
-                hoveredDescription ?? string.Empty, tooltipTextStyle);
+                body, tooltipTextStyle);
+        }
+
+        private const string TooltipDivider = "<color=#5EA8FF>--------------------</color>";
+
+        private string BuildTooltipBody()
+        {
+            if (hoveredItemType <= 0 || recipeCatalog == null)
+                return ConstructionManagerTooltipText.ToUnityRichText(
+                    hoveredDescription ?? string.Empty);
+
+            var body = new List<string>();
+            string description = ConstructionManagerTooltipText.ToUnityRichText(
+                hoveredDescription ?? string.Empty);
+            var stats = new List<KeyValuePair<int, string>>();
+            string marketLine = null;
+
+            if (recipeCatalog != null && hoveredItemType > 0)
+            {
+                List<string> nativeLines = recipeCatalog.TooltipLines(hoveredItemType);
+                if (nativeLines != null)
+                {
+                    int order = 0;
+                    for (int i = 0; i < nativeLines.Count; i++)
+                    {
+                        string raw = nativeLines[i];
+                        if (string.IsNullOrEmpty(raw)) continue;
+                        if (raw.StartsWith("|IS|", StringComparison.Ordinal)) continue;
+
+                        string plain = ConstructionManagerTooltipText.ToPlainText(raw).Trim();
+                        if (plain.Length == 0) continue;
+                        if (IsOutputCountLine(plain)) continue;
+                        if (IsDescriptionLine(plain, hoveredDescription)) continue;
+
+                        string rich = ConstructionManagerTooltipText.ToUnityRichText(raw);
+                        if (IsMarketLine(plain))
+                        {
+                            marketLine = rich;
+                            continue;
+                        }
+                        stats.Add(new KeyValuePair<int, string>(order++, rich));
+                    }
+                }
+            }
+
+            stats.Sort((a, b) =>
+            {
+                int pa = StatPriority(ConstructionManagerTooltipText.ToPlainText(a.Value));
+                int pb = StatPriority(ConstructionManagerTooltipText.ToPlainText(b.Value));
+                if (pa != pb) return pa.CompareTo(pb);
+                return a.Key.CompareTo(b.Key);
+            });
+
+            body.Add(TooltipDivider);
+            if (!string.IsNullOrEmpty(description)) body.Add(description);
+            body.Add(TooltipDivider);
+
+            for (int i = 0; i < stats.Count; i++) body.Add(stats[i].Value);
+            if (stats.Count > 0) body.Add(TooltipDivider);
+
+            body.Add("<b><color=#5EA8FF>CRAFTING</color></b>");
+            body.Add("<b>Input Items</b>");
+            List<ConstructionManagerRecipeInput> inputs = recipeCatalog == null || hoveredItemType <= 0
+                ? null
+                : recipeCatalog.Inputs(hoveredItemType);
+            if (inputs != null && inputs.Count > 0)
+            {
+                for (int i = 0; i < inputs.Count; i++)
+                {
+                    ConstructionManagerRecipeInput input = inputs[i];
+                    string display = ResolveItemName(input.ItemType);
+                    body.Add("  • <color=#5EA8FF>" +
+                        ConstructionManagerTooltipText.ToUnityRichText(display) +
+                        "</color>: <color=#add2ff>" + input.Count + "</color>");
+                }
+            }
+            else
+            {
+                body.Add("  (none)");
+            }
+
+            int outputCount = recipeCatalog == null || hoveredItemType <= 0
+                ? 0
+                : recipeCatalog.OutputCount(hoveredItemType);
+            if (outputCount > 1)
+                body.Add("<color=#add2ff>Output: " + outputCount + "</color>");
+
+            float craftTime = recipeCatalog == null || hoveredItemType <= 0
+                ? -1f
+                : recipeCatalog.CraftTime(hoveredItemType);
+            if (craftTime >= 0f)
+            {
+                string label = itemCatalog == null ? null : itemCatalog.Localize("guiCraftTime");
+                if (string.IsNullOrEmpty(label)) label = "Craft time";
+                string unit = itemCatalog == null ? null : itemCatalog.Localize("utsSecond");
+                if (string.IsNullOrEmpty(unit)) unit = "secs";
+                body.Add("<b>" + ConstructionManagerTooltipText.ToUnityRichText(label) +
+                    ":</b> " + ConstructionManagerTooltipText.FormatSeconds(craftTime) +
+                    " " + ConstructionManagerTooltipText.ToUnityRichText(unit));
+            }
+
+            body.Add(TooltipDivider);
+            if (string.IsNullOrEmpty(marketLine))
+                body.Add("<b>Marketprice (average):</b> -");
+            else
+                body.Add(marketLine);
+
+            return string.Join("\n", body.ToArray());
+        }
+
+        private string ResolveItemName(int itemType)
+        {
+            if (itemCatalog == null) return itemType.ToString();
+            string internalName = itemCatalog.GetInternalName(itemType);
+            if (string.IsNullOrEmpty(internalName)) return itemType.ToString();
+            ConstructionManagerItemDefinition definition = itemCatalog.Get(internalName, itemType);
+            return definition == null ? internalName : definition.DisplayName;
+        }
+
+        private bool IsOutputCountLine(string plain)
+        {
+            string label = itemCatalog == null ? null : itemCatalog.Localize("biwOutputCount");
+            if (!string.IsNullOrEmpty(label) &&
+                plain.StartsWith(label, StringComparison.OrdinalIgnoreCase)) return true;
+            return plain.StartsWith("Output Count", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsDescriptionLine(string plain, string description)
+        {
+            if (string.IsNullOrEmpty(description)) return false;
+            string probe = ConstructionManagerTooltipText.ToPlainText(description).Trim();
+            if (probe.Length > 40) probe = probe.Substring(0, 40);
+            return probe.Length > 0 &&
+                   plain.IndexOf(probe, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool IsMarketLine(string plain)
+        {
+            return plain.IndexOf("market", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   plain.IndexOf("price", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static int StatPriority(string plain)
+        {
+            string value = (plain ?? string.Empty).TrimStart();
+            if (value.StartsWith("Mass", StringComparison.OrdinalIgnoreCase)) return 0;
+            if (value.StartsWith("Volume", StringComparison.OrdinalIgnoreCase)) return 1;
+            if (value.StartsWith("Placeable", StringComparison.OrdinalIgnoreCase)) return 2;
+            if (value.StartsWith("Size", StringComparison.OrdinalIgnoreCase)) return 3;
+            if (value.StartsWith("Allow in BP", StringComparison.OrdinalIgnoreCase) ||
+                value.IndexOf("Blueprint", StringComparison.OrdinalIgnoreCase) >= 0)
+                return 4;
+            if (value.StartsWith("Airtight", StringComparison.OrdinalIgnoreCase) ||
+                value.IndexOf("Oxygen", StringComparison.OrdinalIgnoreCase) >= 0)
+                return 5;
+            return 10;
         }
 
         private void EnsureTemplates()
@@ -721,8 +883,8 @@ namespace RE2Extended.Runtime.ConstructionManager
                 clipping = TextClipping.Clip
             };
             tooltipBoxStyle = GUI.skin.box;
-            tooltipTitleStyle = new GUIStyle(labelStyle) { fontStyle = FontStyle.Bold };
-            tooltipTextStyle = new GUIStyle(labelStyle) { wordWrap = true, richText = false };
+            tooltipTitleStyle = new GUIStyle(labelStyle) { fontStyle = FontStyle.Bold, richText = true };
+            tooltipTextStyle = new GUIStyle(labelStyle) { wordWrap = true, richText = true };
         }
 
         internal void Dispose()

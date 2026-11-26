@@ -33,9 +33,11 @@ Configuration:
 - `Configuration/Templates/ConstructionManager.ecf`
 - localization rows in `Configuration/Localization.csv`
 
-The manager block uses the `ConsoleDesk_C05` model and native `Class: Switch` so
-there is a normal use interaction. It is detected by block name through the
-RE2Extended condition bucket, not by a hardcoded numeric ID.
+The manager block uses the `ConsoleDesk_C05` model and native `Class: ArmorLocker`
+with `VolumeCapacity` and `GridSize`, giving it look-at interaction and
+device-list access without appearing as a normal cargo container. It is detected
+by block name through the RE2Extended condition bucket, not by a hardcoded
+numeric ID.
 
 ## Phase 0 probe
 
@@ -107,7 +109,16 @@ The window contains:
     to All;
   - filter buttons have tooltips;
 - right: searchable 5-column grid of square template cells showing the native
-  item icon; hovering a cell shows the item name and localized item description;
+  item icon; hovering a cell shows a constructor-style tooltip built from native
+  `NodeProvider.CleanActivator(false)` lines, including description, displayed
+  stats (mass, volume, dimensions, airtightness, market value, etc.), required
+  inputs, output count and craft time;
+- tooltip NGUI color/bold/italic/underline markup is converted to Unity rich
+  text; item-stock checks are intentionally omitted;
+- tooltip layout is sectioned with dividers: item description, ordered block/item
+  stats, `CRAFTING` with input-item bullets and craft time, then market price;
+- recipe inputs are read from native `PaneFactory` entries rather than rendering
+  the cumulative native `|IS|` input lines, so inputs are not repeated;
 - template clicks merge into an existing queue row with the same item:
   - click: +1
   - Shift+click: +10
@@ -124,6 +135,8 @@ The window contains:
   covers block groups such as `AdvancedDecoDeviceBlocks`;
 - grid filtering uses the native `RegistryOptions` `ClientScope` value derived
   from `AllowPlacingAt` (`Base -> BA`, `MS -> CV`, `SS -> SV`, `GV -> HV`);
+  non-block items have scope `0` and therefore appear only under the `All`
+  grid filter, matching the native bitmask intersection;
 - template order follows the native global recipe list order used by
   `SymbolService`, not alphabetical mapping order; this keeps the base-game order
   such as Graphite, Iron Ore, Copper Ore in Components;
@@ -159,12 +172,16 @@ native Escape handling, focus-loss close, and foreign-window behavior.
 
 ## Opening the window
 
-Three triggers are wired:
+Openers are wired through several paths:
 
-1. `GameEventType.DeviceUsed` whose argument matches `ConstructionManager` or
-   `Construction Manager` and the local structure contains a manager block.
-2. `F8` while the local structure contains a manager block.
-3. An owned `Construction Manager` UGUI button beside the native Escape menu.
+1. `GameEventType.InventoryOpened` whose event arguments include the manager
+   block position; the native container window is closed before the manager
+   modal opens.
+2. `GameEventType.DeviceUsed` or `DeviceNamePowered` whose argument matches
+   `ConstructionManager` / `Construction Manager`.
+3. `GameEventType.BlockChanged` at the manager block position.
+4. `F8` while the local structure contains a manager block.
+5. An owned `Construction Manager` UGUI button beside the native Escape menu.
 
 All three request an open, but the manager can only adopt its modal when the
 native window stack is empty. If a block interaction has left a native window

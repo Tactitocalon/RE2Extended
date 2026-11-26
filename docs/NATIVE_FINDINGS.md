@@ -960,11 +960,13 @@ native default device-use path raises:
 GameEventType.DeviceUsed, ActionLayout.SortFunction(position), ...
 ```
 
-The Phase 1 implementation matches `DeviceUsed` argument 1 against
-`ConstructionManager` / `Construction Manager`, then checks that the local
-structure contains a manager block. This is a static hypothesis until the Phase
-0 event log confirms that the chosen `Class: Switch` console block raises
-`DeviceUsed`. `F8` and the Escape-menu entry are deliberate fallback openers.
+The Phase 1 manager block now uses native `Class: ArmorLocker` (a container with
+`VolumeCapacity`) so it supports look-at interaction and device-list access.
+Container interaction raises `GameEventType.InventoryOpened`; the manager checks
+all event arguments for a native `Vector3i` matching the manager block, closes
+the resulting foreign native window through the UI manager, then adopts its own
+modal. `DeviceUsed`, `DeviceNamePowered`, `BlockChanged`, `F8` and the
+Escape-menu entry remain secondary openers.
 
 ### Native modal lease for mod-owned UI
 
@@ -1028,11 +1030,25 @@ Native category and grid metadata:
 - Block grid type: `RegistryOptions` `ClientScope`, parsed from
   `AllowPlacingAt`. Decoded mapping: `Base = 2`, `SS = 4`, `MS = 8`, `GV = 16`
   (`Terrain = 1`). The UI maps `Base -> BA`, `MS -> CV`, `SS -> SV`, `GV -> HV`.
-- Non-block items have scope `0`; the native template browser ignores the grid
-  filter for those items.
+- Non-block items have scope `0`. With any non-`All` grid filter selected, the
+  native bitmask intersection is zero, so those items are excluded; they appear
+  only under `All`. Do not treat scope `0` as "matches every grid".
 - Block display metadata for template cells lives in the `RegistryOptions`
   `DynamicProperties` (`CustomName`, `CustomIcon`, `Info`), not only in
   `AddinEditor`. `AdvancedDecoDeviceBlocks` is the reference case.
+- Tooltip content: `NodeProvider.CleanActivator(false)` returns the native
+  constructor tooltip lines (ingredient section, output count, and displayed
+  dynamic properties such as Mass, Volume, dimensions, airtightness and
+  MarketPrice). Native lines use NGUI markup such as `[c][RRGGBB]`, `[-]`,
+  `[b]`, `[i]`, `[u]`, `[sup]`, `[sub]`; the manager converts these to Unity
+  IMGUI rich text. Craft time is `NodeProvider`'s public float field (token
+  `0x04001993` in build 5232) and is added separately using the localized
+  `guiCraftTime` / `utsSecond` labels.
+- `NodeProvider.CleanActivator(false)` emits cumulative `|IS|` lines for recipe
+  inputs (each line contains all inputs seen so far). Do not render every line as
+  an input row. Read the actual inputs from the `NodeProvider` `List<PaneFactory>`
+  and the `PaneFactory` options/quantity fields, or take only the final cumulative
+  line.
 - Native template order: `ItemGridTemplates.JoinAspect` sorts `DialogEventArgs`
   by `DialogEventArgs.DeployXmlFile`, which compares craft/unlock state and then
   the original `DialogEventArgs.colorInitialized` index. That index is assigned

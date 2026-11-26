@@ -325,6 +325,20 @@ namespace RE2Extended.Runtime.ConstructionManager
             }
         }
 
+        internal bool CloseForeignTop()
+        {
+            try
+            {
+                Stack<string> stack = Stack;
+                if (stack == null || stack.Count == 0 || Top) return false;
+                return (bool)closeTopMethod.Invoke(manager, null);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         internal bool CloseTop()
         {
             try
